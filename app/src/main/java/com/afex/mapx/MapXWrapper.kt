@@ -122,7 +122,7 @@ class MapXWrapper(private val context: Context, private val eventSink: EventEmit
     }
 
     @SuppressLint("MissingPermission")
-    fun getPairedDeviceList(): List<BluetoothDevice>{
+    fun getPairedDeviceList(): List<List<BluetoothDevice>> {
         checkLicense();
         val bondedDevices = bluetoothAdapter.bondedDevices
         val connectedDevices = arrayListOf<BluetoothDevice>()
@@ -130,12 +130,9 @@ class MapXWrapper(private val context: Context, private val eventSink: EventEmit
             connectedDevices.addAll(bluetoothManager.getConnectedDevices(profile))
         }
 
-        bondedDevices?.map { bonded ->
-            deviceToJson(bonded,
-                connectedDevices.any { connected -> connected.address == bonded.address }
-            )
-        }
-        return connectedDevices
+        Log.d(TAG, "connect devices: ${connectedDevices.size}")
+        Log.d(TAG, "paired devices: ${bondedDevices.size}")
+        return listOf(bondedDevices.toList(), connectedDevices)
     }
 
     @SuppressLint("MissingPermission")
