@@ -1,0 +1,25 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        //maven { url 'https://storage.googleapis.com/download.flutter.io' }
+        //mavenLocal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        //maven { url 'https://storage.googleapis.com/download.flutter.io' }
+        //mavenLocal()
+    }
+}
+rootProject.name = "mapx"
+include ':app'
+//setBinding(new Binding([gradle: this]))                                // new
+//evaluate(new File(                                                     // new
+//        settingsDir.parentFile,                                              // new
+//        'flutter_module/.android/include_flutter.groovy'                         // new
+//))                                                                      // new

@@ -1,0 +1,140 @@
+buildscript {
+    ext.kotlin_version = '1.7.10'
+    //ext.kotlin_version = '1.8.20'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.3.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'maven-publish'
+}
+
+android {
+    namespace 'com.afex.mapx'
+    compileSdk 33
+
+    defaultConfig {
+        //applicationId "com.afex.mapx"
+        minSdk 24
+        targetSdk 33
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+
+//    packagingOptions {
+//        exclude 'io.flutter.**' // Exclude all Flutter-related classes
+//    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+//        profile {
+//            initWith debug
+//        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+
+publishing {
+    publications {
+        myPulication(MavenPublication) {
+            groupId 'com.afex'
+            version '1.0.1'
+            artifactId 'mapx'
+            artifact("$buildDir/outputs/aar/app-release.aar")
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+//repositories {
+//    maven {
+//        //url '/Users/afex/StudioProjects/flutter_module/build/host/outputs/repo'
+//        url '/Users/afex/.m2/repository'
+//        // This is relative to the location of the build.gradle file
+//        // if using a relative path.
+//    }
+//    maven {
+//        url 'https://storage.googleapis.com/download.flutter.io'
+//    }
+//}
+dependencies {
+
+    implementation 'androidx.core:core-ktx:1.12.0'
+    //implementation 'androidx.appcompat:appcompat:1.6.1'
+    //implementation 'com.google.android.material:material:1.9.0'
+    //testImplementation 'junit:junit:4.13.2'
+    //androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    //androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    //implementation project(':flutter')
+
+//    debugImplementation('com.afex.flutter_module:flutter_debug:1.0'){
+//        exclude group: 'io.flutter', module: 'flutter_embedding_debug'
+//        // Add more exclusions for the classes you want to exclude
+//        exclude group: 'io.flutter', module: 'flutter'
+//        exclude group: 'io.flutter', module: 'flutter_plugin'
+//        exclude group: 'io.flutter', module: 'BuildConfig'
+//        exclude group: 'io.flutter', module: 'FlutterInjector'
+//        exclude group: 'io.flutter', module: 'Log'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
+//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
+//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
+//    }
+//    profileImplementation('com.afex.flutter_module:flutter_profile:1.0'){
+//        exclude group: 'io.flutter', module: 'flutter_embedding_profile'
+//        // Add more exclusions for the classes you want to exclude
+//        exclude group: 'io.flutter', module: 'flutter'
+//        exclude group: 'io.flutter', module: 'flutter_plugin'
+//        exclude group: 'io.flutter', module: 'BuildConfig'
+//        exclude group: 'io.flutter', module: 'FlutterInjector'
+//        exclude group: 'io.flutter', module: 'Log'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
+//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
+//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
+//    }
+//    releaseImplementation('com.afex.flutter_module:flutter_release:1.0'){
+//        //exclude group: 'io.flutter', module: 'flutter_embedding_release'
+//        // Add more exclusions for the classes you want to exclude
+//        exclude group: 'io.flutter', module: 'flutter'
+//        exclude group: 'io.flutter', module: 'flutter_plugin'
+//        exclude group: 'io.flutter', module: 'BuildConfig'
+//        exclude group: 'io.flutter', module: 'FlutterInjector'
+//        exclude group: 'io.flutter', module: 'Log'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
+//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
+//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
+//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
+//    }
+}
