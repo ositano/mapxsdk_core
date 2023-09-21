@@ -6,6 +6,7 @@ buildscript {
         mavenCentral()
     }
 
+
     dependencies {
         classpath 'com.android.tools.build:gradle:7.3.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -63,7 +64,7 @@ publishing {
     publications {
         myPulication(MavenPublication) {
             groupId 'com.afex'
-            version '1.0.1'
+            version '1.0.2'
             artifactId 'mapx'
             artifact("$buildDir/outputs/aar/app-release.aar")
         }
@@ -87,6 +88,9 @@ publishing {
 dependencies {
 
     implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.github.LeandroSQ:android-ble-made-easy:1.8.2'
+    //implementation "com.github.weliem:blessed-android:2.4.2"
     //implementation 'androidx.appcompat:appcompat:1.6.1'
     //implementation 'com.google.android.material:material:1.9.0'
     //testImplementation 'junit:junit:4.13.2'

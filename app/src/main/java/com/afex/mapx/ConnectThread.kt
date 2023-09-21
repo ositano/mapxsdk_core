@@ -188,6 +188,7 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
     fun cancel() {
         try {
             mmSocket?.close()
+            //Log.d(TAG, "Connect thread - closed")
         } catch (e: IOException) {
             Log.e(TAG, "Could not close the client socket", e)
         }
