@@ -21,9 +21,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.afex.mapxsdklicense.MapXLicense
-import quevedo.soares.leandro.blemadeeasy.BLE
-import quevedo.soares.leandro.blemadeeasy.BluetoothConnection
-import quevedo.soares.leandro.blemadeeasy.models.BLEDevice
 
 
 private const val TAG = "MapXWrapper"
@@ -43,23 +40,9 @@ class MapXWrapper(private val appCompatActivity: AppCompatActivity, private val 
     private var serviceUUID: String? = null
     private var connectedUUID: String? = null
 
-
-    /******************** Using BLE *************************/
     private var hasBluetoothPermissionBeenGranted = false
     private var hasLocationPermissionBeenGranted = false
-    private val ble = BLE(activity = appCompatActivity)
-    private var connectedBluetoothDevice: BluetoothConnection? = null
 
-    /*******************************************************/
-
-//    private val handler = Handler(Looper.getMainLooper()){
-//        override fun handleMessage(msg: Message) {
-//            // Handle the message here
-//            val what = msg.what // Retrieve the message identifier
-//            val obj = msg.obj // Retrieve the message object
-//            // Your code to handle the message goes here
-//        }
-//    }
 
     private var handler: Handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
@@ -134,303 +117,25 @@ class MapXWrapper(private val appCompatActivity: AppCompatActivity, private val 
     }
 
     fun requestBluetoothPermission(){
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ble.verifyPermissionsAsync(
-                rationaleRequestCallback = {
-                    // Include your code to show an Alert or UI explaining why the permissions are required
-                    // Calling the function bellow if the user agrees to give the permissions
-                    //next()
-                },
-                callback = { granted ->
-                    hasBluetoothPermissionBeenGranted = granted
-                }
-            )
-        }
+//        if (ActivityCompat.checkSelfPermission(
+//                context,
+//                Manifest.permission.BLUETOOTH
+//            ) != PackageManager.PERMISSION_GRANTED
+//        ) {
+//            ble.verifyPermissionsAsync(
+//                rationaleRequestCallback = {
+//                    // Include your code to show an Alert or UI explaining why the permissions are required
+//                    // Calling the function bellow if the user agrees to give the permissions
+//                    //next()
+//                },
+//                callback = { granted ->
+//                    hasBluetoothPermissionBeenGranted = granted
+//                }
+//            )
+//        }
     }
 
-    fun requestLocationPermission(){
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ble.verifyPermissionsAsync(
-                rationaleRequestCallback = {
-                    // Include your code to show an Alert or UI explaining why the permissions are required
-                    // Calling the function bellow if the user agrees to give the permissions
-                    //next()
-                },
-                callback = { granted ->
-                    hasLocationPermissionBeenGranted = granted
-                }
-            )
-        }
-    }
 
-    suspend fun getBluetoothAdapterState(): Boolean{
-        if (!ble.verifyBluetoothAdapterState()) {
-            return false
-        }
-        return true
-    }
-
-    @SuppressLint("MissingPermission")
-    fun scanForDevices(){
-        eventSink.success(
-            mapOf(
-                "type" to "scanningState",
-                "data" to true
-            )
-        )
-        ble.scanAsync(
-            duration = 0,
-
-            /* This is optional, if you want to update your interface in realtime */
-            onDiscover = { device ->
-                // Update your UI with the newest found device, in real time
-                eventSink.success(
-                    mapOf(
-                        "type" to "ble_scanning_found",
-                        "data" to bluetoothDeviceToJson(device)
-                    )
-                )
-            },
-
-            onFinish = { devices ->
-                // Continue with your code handling all the devices found
-                eventSink.success(
-                    mapOf(
-                        "type" to "scanningState",
-                        "data" to false
-                    )
-                )
-                eventSink.success(
-                    mapOf(
-                        "type" to "ble_scanning_finish",
-                        "data" to devices.map {device ->
-                            bluetoothDeviceToJson(device)
-                        }.toList()
-                    )
-                )
-            },
-            onError = { errorCode ->
-                eventSink.success(
-                    mapOf(
-                        "type" to "ble_scanning",
-                        "data" to errorCode
-                    )
-                )
-                // Show an Alert or UI with your preferred error message
-            }, onUpdate = { devices ->
-                eventSink.success(
-                    mapOf(
-                        "type" to "ble_scanning",
-                        "data" to devices.map {device ->
-                            bluetoothDeviceToJson(device)
-                        }.toList()
-                    )
-                )
-            }
-        )
-    }
-
-    fun stopScan(){
-        ble.stopScan()
-    }
-
-    @SuppressLint("MissingPermission")
-    suspend fun getLocationAdapterState(): Boolean{
-        if (!ble.verifyLocationState()) {
-            return false
-        }
-        return true
-    }
-
-    @SuppressLint("MissingPermission")
-    suspend fun onConnectToBleDevice(device: BLEDevice){
-        ble.connect(device)?.let { connection ->
-            // For watching strings
-            eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "connected",
-                        "device" to bluetoothDeviceToJson(device, true)
-                    )
-                )
-            )
-            connectedBluetoothDevice = connection
-            connection.observeString(characteristic = "00000000-0000-0000-0000-000000000000", charset = Charsets.UTF_8) { value: String ->
-                // This will run everytime the characteristic changes it's value
-
-                if (isNumber(value)){ ///likely a battery level
-                    eventSink.success(
-                        mapOf(
-                            "type" to "ble_readBattery",
-                            "data" to  value
-                        )
-                    )
-                }else if (value.contains("MAPX")){ ///likely the device info
-                    eventSink.success(
-                        mapOf(
-                            "type" to "ble_deviceInfo",
-                            "data" to value
-                        )
-                    )
-                }else if (value == "OK"){
-                    eventSink.success(
-                        mapOf(
-                            "type" to "ble_endSession",
-                            "data" to value
-                        )
-                    )
-                }else {
-                    //Log.d(TAG, "  <<<*>>> read data 2: $lastMessage")
-                    if (hasCoordinatesFormat(value) || hasCoordinatesWithHashFormat(value) || value == "#") {
-                        //Log.d(TAG, "  <<<*>>> sending data 1 .... : $lastMessage")
-                        eventSink.success(
-                            mapOf(
-                                "type" to "ble_takePoint",
-                                "data" to mapOf(
-                                    //"bytes" to data,
-                                    "device" to bluetoothDeviceToJson(device),
-                                    "response" to value
-                                )
-                            )
-                        )
-                    }
-
-                    // Send the obtained bytes to the UI activity.
-                    if (value.contains("\n") || value.contains("\r")) {
-                        val lines = value.split("[\r\n]+".toRegex()).toTypedArray()
-                        //Log.d(TAG, "  <<<*>>> sending data 2 .... : ${lines[0]}")
-                        if (hasCoordinatesFormat(lines[0]) || hasCoordinatesWithHashFormat(lines[0])) {
-                            eventSink.success(
-                                mapOf(
-                                    "type" to "ble_takePoint",
-                                    "data" to mapOf(
-                                        //"bytes" to data,
-                                        "device" to bluetoothDeviceToJson(device),
-                                        "response" to value
-                                    )
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    suspend fun disconnectBleDevice(deviceConnection: BluetoothConnection){
-        deviceConnection.close()
-        connectedBluetoothDevice = null
-        eventSink.success(
-            mapOf(
-                "type" to "connection",
-                "data" to mapOf(
-                    "event" to "disconnected",
-                    //"device" to deviceToJson(device)
-                )
-            )
-        )
-    }
-
-    fun pingBleConnection(){
-        val string = "PNG"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    fun getBleDeviceInfo(){
-        val string = "GDI"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    fun takeBlePoint(){
-        val string = "TPT"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    fun endBleSession(){
-        val string = "ESS"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    fun readBleBattery(){
-        val string = "BAR"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    fun shutBleDown(){
-        val string = "SHD"
-        connectedBluetoothDevice?.write(characteristic = "00000000-0000-0000-0000-000000000000", message = string, charset = Charsets.UTF_8)
-            ?: eventSink.success(
-                mapOf(
-                    "type" to "connection",
-                    "data" to mapOf(
-                        "event" to "disconnected",
-                        //"device" to deviceToJson(device)
-                    )
-                )
-            )
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun bluetoothDeviceToJson(device: BLEDevice, connected: Boolean = false) = mapOf(
-        "name" to device.name,
-        "uuid" to device.macAddress,
-        "isConnected" to connected
-    )
-    /********************************************************************************************************/
 
     fun getLicenseAPIInfo():String{
         checkLicense();

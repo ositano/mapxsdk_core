@@ -32,6 +32,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.os.ParcelUuid;
 import android.util.Log;
 import android.util.SparseArray;
@@ -46,9 +47,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.lang.reflect.Method;
+import java.util.regex.Pattern;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import com.afex.mapxsdklicense.MapXLicense;
 
 public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissionsResultCallback
 {
@@ -62,6 +66,41 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
     private BluetoothManager mBluetoothManager;
     private BluetoothAdapter mBluetoothAdapter;
+
+    private SharedPreferencesHelper sharedPreferencesHelper;
+    private Map<String, String> serviceUUIDs = new HashMap<>();
+    private Map<String, String> readUUIDs = new HashMap<>();
+    private Map<String, String> writeUUIDs = new HashMap<>();
+    private String lastConnectedDevice;
+    private BluetoothGatt currentlyConnectedBluetoothGatt;
+    private BluetoothGattCharacteristic currentlyConnectedWriteCharacteristic;
+    private BluetoothGattCharacteristic currentlyConnectedReadCharacteristic;
+
+
+
+
+    private final int messageRead = 0;
+    private final int messageTakePoint = 3;
+    private final int messageEndSession = 4;
+    private final int messageReadBattery = 5;
+    private final int messageShutDown = 6;
+    private final int messageDeviceInfo = 7;
+    private final int  messageSocketClosed = 8;
+    private String licenseKey;
+    private Boolean isLicenseValid;
+    private String serviceUUID;
+    //private String connectedUUID;
+    private boolean hasBluetoothPermissionBeenGranted = false;
+    private boolean hasLocationPermissionBeenGranted = false;
+    private final Map<String, BluetoothDevice> devices = new HashMap<>();
+    private final Map<String, ConnectThread> connections = new HashMap<>();
+    private final Handler handler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            handleMessageFromBluetoothDevice(msg);
+        }
+    };
+
 
     static final private String CCCD = "00002902-0000-1000-8000-00805f9b34fb";
 
@@ -82,6 +121,10 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         this.context = context;
         this.activity = activity;
         this.emitter = emitter;
+        licenseKey = "";
+
+        sharedPreferencesHelper = new SharedPreferencesHelper(this.context);
+        //lastConnectedDevice = sharedPreferencesHelper.getLastConnectedDevice();
 
         IntentFilter filterAdapter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         this.context.registerReceiver(mBluetoothAdapterStateReceiver, filterAdapter);
@@ -143,6 +186,55 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     // ██       ██   ██  ██       ██
     //  ██████  ██   ██  ███████  ███████
 
+    private void checkLicense() throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
+        if (isLicenseValid == null) {
+            throw new MapXLicense.LicenseInitializationException("License key has not been initialized");
+        }
+        if (!isLicenseValid) {
+            throw new MapXLicense.InvalidLicenseException("Invalid license key");
+        }
+    }
+
+    public boolean initialize(String licenseKey) {
+        this.licenseKey = licenseKey;
+        boolean licenseStatus = MapXLicense.INSTANCE.isLicenseValid(licenseKey);
+        isLicenseValid = licenseStatus;
+        return licenseStatus;
+    }
+
+    public boolean hasBluetoothPermission() {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH
+        ) != PackageManager.PERMISSION_GRANTED) {
+            hasBluetoothPermissionBeenGranted = false;
+            return false;
+        }
+        hasBluetoothPermissionBeenGranted = true;
+        return true;
+    }
+
+    public boolean hasLocationPermission() {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED) {
+            hasLocationPermissionBeenGranted = false;
+            return false;
+        }
+        hasLocationPermissionBeenGranted = true;
+        return true;
+    }
+
+    public String getLicenseAPIInfo() throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
+        checkLicense();
+        return MapXLicense.INSTANCE.getLicenseAPIInfo(licenseKey);
+    }
+
+    public String getLicenseInfo() throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
+        checkLicense();
+        return MapXLicense.INSTANCE.getLicenseInfo(licenseKey);
+    }
 
     public boolean isBluetoothAdapterAvailable(){
         return mBluetoothAdapter != null;
@@ -179,6 +271,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             if (mBluetoothAdapter.isEnabled()) {
                 Map<String, Object> emitObject = new HashMap<>();
                 emitObject.put("type", "adapterState");
+                emitObject.put("status", true);
                 emitObject.put("data", true);
                 emitter.success(emitObject);
                 return;
@@ -203,8 +296,13 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ensurePermissions(permissions, (granted, perm) -> {
 
             if (!mBluetoothAdapter.isEnabled()) {
+                currentlyConnectedBluetoothGatt = null;
+                currentlyConnectedWriteCharacteristic = null;
+                currentlyConnectedReadCharacteristic = null;
+
                 Map<String, Object> emitObject = new HashMap<>();
                 emitObject.put("type", "adapterState");
+                emitObject.put("status", false);
                 emitObject.put("data", false);
                 emitter.success(emitObject);
                 return;
@@ -212,8 +310,14 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
             // this is deprecated in API level 33.
             boolean disabled = mBluetoothAdapter.disable();
+            if(disabled){
+                currentlyConnectedBluetoothGatt = null;
+                currentlyConnectedWriteCharacteristic = null;
+                currentlyConnectedReadCharacteristic = null;
+            }
             Map<String, Object> emitObject = new HashMap<>();
             emitObject.put("type", "adapterState");
+            emitObject.put("status", disabled);
             emitObject.put("data", disabled);
             emitter.success(emitObject);
             return;
@@ -302,10 +406,60 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     }
 
     @SuppressLint("MissingPermission")
+    public void startBluetoothScanning(){
+        if(mBluetoothAdapter != null){
+            if(mBluetoothAdapter.isDiscovering()){
+                mBluetoothAdapter.cancelDiscovery();
+            }
+            mBluetoothAdapter.startDiscovery();
+            IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+            context.registerReceiver(scanningReceiver, filter);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private final BroadcastReceiver scanningReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+
+            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+
+                HashMap<String, Object> deviceInfo = bmBluetoothDevice(device);
+                Map<String, Object> emitObject = new HashMap<>();
+                emitObject.put("type", "adapterScanning");
+                emitObject.put("status", true);
+                emitObject.put("data", deviceInfo);
+                emitter.success(emitObject);
+
+                if(lastConnectedDevice != null && device.getAddress().equals(lastConnectedDevice)){
+                    stopBluetoothAdapterScan();
+                    connectToBluetoothDevice(lastConnectedDevice, true);
+                }
+            }
+        }
+    };
+
+
+
+    @SuppressLint("MissingPermission")
     public void stopBluetoothAdapterScan(){
         BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
         if(scanner != null) {
             scanner.stopScan(getScanCallback());
+        }
+        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.put("type", "adapterScanning");
+        emitObject.put("status", false);
+        emitObject.put("error", "Stopped scanning");
+        emitter.success(emitObject);
+    }
+
+    @SuppressLint("MissingPermission")
+    public void stopScanningClassicDevices(){
+        if(mBluetoothAdapter.isDiscovering()) {
+            mBluetoothAdapter.cancelDiscovery();
         }
         Map<String, Object> emitObject = new HashMap<>();
         emitObject.put("type", "adapterScanning");
@@ -354,15 +508,18 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     }
 
     @SuppressLint("MissingPermission")
-    public void connectToBluetoothDevice(String macAddress, boolean autoConnect){
+    public boolean connectToBluetoothDevice(String macAddress, boolean autoConnect){
         BluetoothDevice bluetoothDevice = mBluetoothAdapter.getRemoteDevice(macAddress);
+
+        if(bluetoothDevice != null && bluetoothDevice.getType() == BluetoothDevice.DEVICE_TYPE_CLASSIC){
+            return connectToDeviceInternal(bluetoothDevice);
+        }
         HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
         ArrayList<String> permissions = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= 31) { // Android 12 (October 2021)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
         }
-
-
+        //make sure to check for bluetooth connect permission before proceeding
         ensurePermissions(permissions, (granted, perm) -> {
             if (!granted) {
                 Map<String, Object> emitObject = new HashMap<>();
@@ -373,58 +530,106 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 emitter.success(emitObject);
                 return;
             }
+        });
 
-            // remember autoconnect
-            mAutoConnect.put(macAddress, autoConnect);
+        // remember autoconnect
+        mAutoConnect.put(macAddress, autoConnect);
 
-            // already connected?
-            BluetoothGatt gatt = mConnectedDevices.get(macAddress);
-            if (gatt != null) {
-                log(LogLevel.DEBUG, "MapXHardWareConnector -  already connected");
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "adapterConnection");
-                emitObject.put("status", true);
-                emitObject.put("data", deviceMap);
-                emitter.success(emitObject);
-                return;
-            }
-
-            // connect with new gatt
-            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(macAddress);
-            if (Build.VERSION.SDK_INT >= 23) { // Android 6.0 (October 2015)
-                gatt = device.connectGatt(context, autoConnect, mGattCallback, BluetoothDevice.TRANSPORT_LE);
-            } else {
-                gatt = device.connectGatt(context, autoConnect, mGattCallback);
-            }
-
-            // error check
-            if (gatt == null) {
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "adapterConnection");
-                emitObject.put("status", false);
-                emitObject.put("data", deviceMap);
-                emitObject.put("error", "Unable to connect");
-                emitter.success(emitObject);
-                return;
-            }
-
-            log(LogLevel.DEBUG, "MapXHardWareConnector -  established connection");
-            deviceMap.put("isConnected", true);
+        // already connected?
+        BluetoothGatt gatt = mConnectedDevices.get(macAddress);
+        if (gatt != null) {
+            log(LogLevel.DEBUG, "MapXHardWareConnector -  already connected");
             Map<String, Object> emitObject = new HashMap<>();
             emitObject.put("type", "adapterConnection");
             emitObject.put("status", true);
             emitObject.put("data", deviceMap);
             emitter.success(emitObject);
-        });
+            return false;
+        }
+
+        // connect with new gatt
+        BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(macAddress);
+        // Android 6.0 (October 2015)
+        gatt = device.connectGatt(context, autoConnect, mGattCallback, BluetoothDevice.TRANSPORT_LE);
+
+        // error check
+        if (gatt == null) {
+            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.put("type", "adapterConnection");
+            emitObject.put("status", false);
+            emitObject.put("data", deviceMap);
+            emitObject.put("error", "Unable to connect");
+            emitter.success(emitObject);
+            return false;
+        }
+
+        currentlyConnectedBluetoothGatt = gatt;
+
+        log(LogLevel.DEBUG, "MapXHardWareConnector -  established connection - "+gatt.toString());
+        deviceMap.put("isConnected", true);
+        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.put("type", "adapterConnection");
+        emitObject.put("status", true);
+        emitObject.put("data", deviceMap);
+        emitter.success(emitObject);
+
+        sharedPreferencesHelper.lastConnectedDevice(device.getAddress());
+
+        return true;
+    }
+
+    /*
+    This function handles bluetooth connection for bluetooth classic devices
+     */
+    @SuppressLint("MissingPermission")
+    private boolean connectToDeviceInternal(BluetoothDevice device) {
+        if (mBluetoothAdapter.isDiscovering()) {
+            mBluetoothAdapter.cancelDiscovery();
+        }
+
+        HashMap<String, Object> deviceMap = bmBluetoothDevice(device);
+        ConnectThread connection = new ConnectThread(handler, device);
+        connections.put(device.getAddress(), connection);
+
+        Log.d(TAG, "bluetooth device connected with address - " + device.getAddress() + " - " + device.getName());
+
+        try {
+            connection.start();
+            lastConnectedDevice = device.getAddress();
+            Log.d(TAG, "bluetooth device connected");
+            sharedPreferencesHelper.lastConnectedDevice(lastConnectedDevice);
+            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.put("type", "adapterConnection");
+            emitObject.put("status", true);
+            emitObject.put("data", deviceMap);
+            emitter.success(emitObject);
+            return true;
+        } catch (Exception exception) {
+            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.put("type", "adapterConnection");
+            emitObject.put("status", false);
+            emitObject.put("data", deviceMap);
+            emitObject.put("error", exception.getLocalizedMessage());
+            emitter.success(emitObject);
+            lastConnectedDevice = null;
+            Log.d(TAG, "unable to connect to bluetooth");
+            Log.d(TAG, exception.getLocalizedMessage() != null ? exception.getLocalizedMessage() : exception.toString());
+            return false;
+        }
     }
 
     @SuppressLint("MissingPermission")
     public boolean disconnectFromBluetoothDevice(String macAddress){
         BluetoothDevice bluetoothDevice = mBluetoothAdapter.getRemoteDevice(macAddress);
+        if(bluetoothDevice != null && bluetoothDevice.getType() == BluetoothDevice.DEVICE_TYPE_CLASSIC){
+            return disconnectDevice(macAddress);
+        }
+
         HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
         // already disconnected?
         BluetoothGatt gatt = mConnectedDevices.get(macAddress);
         if (gatt == null) {
+            currentlyConnectedBluetoothGatt = null;
             Map<String, Object> emitObject = new HashMap<>();
             emitObject.put("type", "debug_message");
             emitObject.put("data", "Disconnect - device already disconnected");
@@ -434,6 +639,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             responseObject.put("type", "adapterConnection");
             responseObject.put("status", false);
             responseObject.put("data", deviceMap);
+            responseObject.put("error", "Disconnect - device already disconnected");
             emitter.success(responseObject);
             log(LogLevel.DEBUG, "MapXHardWareConnector -  already disconnected");// no work to do
             return true;
@@ -444,12 +650,43 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         mAutoConnect.put(macAddress, false);
         gatt.disconnect();
 
+        currentlyConnectedBluetoothGatt = null;
         Map<String, Object> emitObject = new HashMap<>();
         emitObject.put("type", "adapterConnection");
         emitObject.put("status", false);
         emitObject.put("data", deviceMap);
         emitter.success(emitObject);
         return true;
+    }
+
+    public boolean disconnectDevice(String uuid) {
+        ConnectThread connection = connections.get(uuid);
+        if (connection != null) {
+            connection.cancel();
+            Log.d(TAG, "Done closing socket ....");
+            connections.remove(uuid);
+            Log.d(TAG, "Done removing uuid from connections");
+            lastConnectedDevice = null;
+            Log.d(TAG, "We're good to go ....");
+            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(uuid);
+            if (device != null) {
+                Map<String, Object> emitObject = new HashMap<>();
+                emitObject.put("type", "adapterConnection");
+                emitObject.put("status", true);
+                emitObject.put("data", bmBluetoothDevice(device));
+                emitter.success(emitObject);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void writeData(String uuid, byte[] data) throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
+        checkLicense();
+        ConnectThread connection = connections.get(uuid);
+        if (connection != null) {
+            connection.write(data);
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -470,164 +707,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         return gatt.discoverServices();
     }
 
-    @SuppressLint("MissingPermission")
-    public boolean readCharacteristics(HashMap<String, Object> payloads){
-        // see: BmReadCharacteristicRequest
-        String remoteId =             (String) payloads.get("mac_address");
-        String serviceUuid =          (String) payloads.get("service_uuid");
-        String secondaryServiceUuid = (String) payloads.get("secondary_service_uuid");
-        String characteristicUuid =   (String) payloads.get("characteristic_uuid");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("readCharacteristic", "device is disconnected", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReadCharacteristics - device already disconnected");
-            emitter.success(emitObject);
-            return false;
-        }
-
-        // find characteristic
-        ChrFound found = locateCharacteristic(gatt, serviceUuid, secondaryServiceUuid, characteristicUuid);
-        if (found.error != null) {
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReadCharacteristics - "+found.error);
-            emitter.success(emitObject);
-            //result.error("readCharacteristic", found.error, null);
-            return false;
-        }
-
-        BluetoothGattCharacteristic characteristic = found.characteristic;
-
-        // check readable
-        if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) == 0) {
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "Read characteristic - The READ property is not supported by this BLE characteristic");
-            emitter.success(emitObject);
-            //result.error("readCharacteristic", "The READ property is not supported by this BLE characteristic", null);
-            return false;
-        }
-
-        // read
-        //result.error("readCharacteristic", "gatt.readCharacteristic() returned false", null);
-        return gatt.readCharacteristic(characteristic);
-    }
-
-    @SuppressLint("MissingPermission")
-    public boolean writeCharacteristics(HashMap<String, Object> payloads){
-        // see: BmWriteCharacteristicRequest
-        String remoteId =             (String) payloads.get("mac_address");
-        String serviceUuid =          (String) payloads.get("service_uuid");
-        String secondaryServiceUuid = (String) payloads.get("secondary_service_uuid");
-        String characteristicUuid =   (String) payloads.get("characteristic_uuid");
-        String value =                (String) payloads.get("value");
-        int writeTypeInt =               (int) payloads.get("write_type");
-        boolean allowLongWrite =        ((int) payloads.get("allow_long_write")) != 0;
-
-        int writeType = writeTypeInt == 0 ?
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT :
-                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteCharacteristics - device already disconnected");
-            emitter.success(emitObject);
-            //result.error("writeCharacteristic", "device is disconnected", null);
-            return false;
-        }
-
-        // find characteristic
-        ChrFound found = locateCharacteristic(gatt, serviceUuid, secondaryServiceUuid, characteristicUuid);
-        if (found.error != null) {
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteCharacteristics - "+found.error);
-            emitter.success(emitObject);
-            //result.error("writeCharacteristic", found.error, null);
-            return false;
-        }
-
-        BluetoothGattCharacteristic characteristic = found.characteristic;
-
-        // check writeable
-        if(writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) {
-            if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) == 0) {
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteCharacteristics - device already disconnected");
-                emitter.success(emitObject);
-                //result.error("writeCharacteristic", "The WRITE_NO_RESPONSE property is not supported by this BLE characteristic", null);
-                return false;
-            }
-        } else {
-            if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0) {
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteCharacteristics - device already disconnected");
-                emitter.success(emitObject);
-                //result.error("writeCharacteristic", "The WRITE property is not supported by this BLE characteristic", null);
-                return false;
-            }
-        }
-
-        // check maximum payload
-        int maxLen = getMaxPayload(remoteId, writeType, allowLongWrite);
-        int dataLen = hexToBytes(value).length;
-        if (dataLen > maxLen) {
-            String t = writeTypeInt == 0 ? "withResponse" : "withoutResponse";
-            String a = allowLongWrite ? ", allowLongWrite" : ", noLongWrite";
-            String b = writeTypeInt == 0 ? a : "";
-            String s = "data longer than allowed. dataLen: " + dataLen + " > max: " + maxLen + " (" + t + b +")";
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteCharacteristics - "+s);
-            emitter.success(emitObject);
-            //result.error("writeCharacteristic", s, null);
-            return false;
-        }
-
-        // write characteristic
-        if (Build.VERSION.SDK_INT >= 33) { // Android 13 (August 2022)
-
-            int rv = gatt.writeCharacteristic(characteristic, hexToBytes(value), writeType);
-
-            if (rv != BluetoothStatusCodes.SUCCESS) {
-                String s = "gatt.writeCharacteristic() returned " + rv + " : " + bluetoothStatusString(rv);
-                //result.error("writeCharacteristic", s, null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteCharacteristics - "+s);
-                emitter.success(emitObject);
-                return false;
-            }
-
-        } else {
-            // set value
-            if(!characteristic.setValue(hexToBytes(value))) {
-                //result.error("writeCharacteristic", "characteristic.setValue() returned false", null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteCharacteristics - characteristic set value returned false");
-                emitter.success(emitObject);
-                return false;
-            }
-
-            // Write type
-            characteristic.setWriteType(writeType);
-
-            // Write Char
-            //result.error("writeCharacteristic", "gatt.writeCharacteristic() returned false", null);
-            return gatt.writeCharacteristic(characteristic);
-        }
-        return true;
-    }
 
     @SuppressLint("MissingPermission")
     public Map<String, Object> getPairedDevices(){
@@ -740,326 +819,140 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         return (boolean) removeBondMethod.invoke(device);
     }
 
-    @SuppressLint("MissingPermission")
-    public boolean readRSSI(String macAddress){
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(macAddress);
-        if(gatt == null) {
-            //result.error("readRssi", "device is disconnected", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReaRSSI - device already disconnected");
-            emitter.success(emitObject);
-            return false;
-        }
 
-        // read rssi
-        //result.error("readRssi", "gatt.readRemoteRssi() returned false", null);
-        return gatt.readRemoteRssi();
+
+
+    public void handleMessageFromBluetoothDevice(Message msg) {
+        MessageObject message = (MessageObject) msg.obj;
+        Log.d(TAG, "Message from Device thread:  "+msg.what+" - "+message.getDevice()+" - "+message.getDataMessage());
+        switch (msg.what) {
+            case messageSocketClosed:
+                // Handle received data
+                disconnectDevice(message.getDevice().getAddress());
+
+                break;
+            case messageRead:
+                // Handle received data
+                HashMap<String, Object> response = new HashMap<>();
+                response.put("type", "randomData");
+                response.put("status", true);
+                response.put("data", bmBluetoothDevice(message.getDevice()));
+                response.put("message", message.getDataMessage());
+                emitter.success(response);
+                break;
+
+            case messageDeviceInfo:
+                HashMap<String, Object> deviceResponse = new HashMap<>();
+                deviceResponse.put("type", "deviceInfo");
+                deviceResponse.put("status", true);
+                deviceResponse.put("data", bmBluetoothDevice(message.getDevice()));
+                deviceResponse.put("message", message.getDataMessage());
+                emitter.success(deviceResponse);
+                break;
+
+            case messageTakePoint:
+                HashMap<String, Object> takePointResponse = new HashMap<>();
+                takePointResponse.put("type", "takePoint");
+                takePointResponse.put("status", true);
+                takePointResponse.put("data", bmBluetoothDevice(message.getDevice()));
+                takePointResponse.put("message", message.getDataMessage());
+                emitter.success(takePointResponse);
+                break;
+
+            case messageEndSession:
+                HashMap<String, Object> endSessionResponse = new HashMap<>();
+                endSessionResponse.put("type", "endSession");
+                endSessionResponse.put("status", true);
+                endSessionResponse.put("data", bmBluetoothDevice(message.getDevice()));
+                endSessionResponse.put("message", message.getDataMessage());
+                emitter.success(endSessionResponse);
+                break;
+
+            case messageReadBattery:
+                HashMap<String, Object> batteryResponse = new HashMap<>();
+                batteryResponse.put("type", "readBattery");
+                batteryResponse.put("status", true);
+                batteryResponse.put("data", bmBluetoothDevice(message.getDevice()));
+                batteryResponse.put("message", message.getDataMessage());
+                emitter.success(batteryResponse);
+                break;
+
+            case messageShutDown:
+                HashMap<String, Object> shutDownResponse = new HashMap<>();
+                shutDownResponse.put("type", "shutDown");
+                shutDownResponse.put("status", true);
+                shutDownResponse.put("data", bmBluetoothDevice(message.getDevice()));
+                shutDownResponse.put("message", message.getDataMessage());
+                emitter.success(shutDownResponse);
+                break;
+        }
+        Log.d(TAG, msg.toString());
     }
 
-    @SuppressLint("MissingPermission")
-    public boolean readDescriptor(HashMap<String, Object> payloads){
-        // see: BmReadDescriptorRequest
-        String remoteId =             (String) payloads.get("mac_address");
-        String serviceUuid =          (String) payloads.get("service_uuid");
-        String secondaryServiceUuid = (String) payloads.get("secondary_service_uuid");
-        String characteristicUuid =   (String) payloads.get("characteristic_uuid");
-        String descriptorUuid =       (String) payloads.get("descriptor_uuid");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("readDescriptor", "device is disconnected", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReadDescriptor - device already disconnected");
-            emitter.success(emitObject);
-            return false;
+    public void destroyResources() {
+        // Release resources and close Bluetooth connections
+        for (ConnectThread connection : connections.values()) {
+            connection.cancel();
         }
-
-        // find characteristic
-        ChrFound found = locateCharacteristic(gatt, serviceUuid, secondaryServiceUuid, characteristicUuid);
-        if (found.error != null) {
-            //result.error("readDescriptor", found.error, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReadDescriptor - "+found.error);
-            emitter.success(emitObject);
-            return false;
-        }
-
-        BluetoothGattCharacteristic characteristic = found.characteristic;
-
-        // find descriptor
-        BluetoothGattDescriptor descriptor = getDescriptorFromArray(descriptorUuid, characteristic.getDescriptors());
-        if(descriptor == null) {
-            String s = "descriptor not found on characteristic. (desc: " + descriptorUuid + " chr: " + characteristicUuid + ")";
-            //result.error("writeDescriptor", s, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "ReadDescriptor - "+s);
-            emitter.success(emitObject);
-            return false;
-        }
-
-        // read descriptor
-        //result.error("readDescriptor", "gatt.readDescriptor() returned false", null);
-        return gatt.readDescriptor(descriptor);
+        connections.clear();
+        context.unregisterReceiver(scanningReceiver);
     }
 
-    @SuppressLint("MissingPermission")
-    public boolean writeDescriptor(HashMap<String, Object> payloads){
-        // see: BmWriteDescriptorRequest
-        String remoteId =             (String) payloads.get("remote_id");
-        String serviceUuid =          (String) payloads.get("service_uuid");
-        String secondaryServiceUuid = (String) payloads.get("secondary_service_uuid");
-        String characteristicUuid =   (String) payloads.get("characteristic_uuid");
-        String descriptorUuid =       (String) payloads.get("descriptor_uuid");
-        String value =                (String) payloads.get("value");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("writeDescriptor", "device is disconnected", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteDescriptor - device already disconnected");
-            emitter.success(emitObject);
-            return false;
-        }
-
-        // find characteristic
-        ChrFound found = locateCharacteristic(gatt, serviceUuid, secondaryServiceUuid, characteristicUuid);
-        if (found.error != null) {
-            //result.error("writeDescriptor", found.error, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteDescriptor - "+found.error);
-            emitter.success(emitObject);
-            return false;
-        }
-
-        BluetoothGattCharacteristic characteristic = found.characteristic;
-
-        // find descriptor
-        BluetoothGattDescriptor descriptor = getDescriptorFromArray(descriptorUuid, characteristic.getDescriptors());
-        if(descriptor == null) {
-            String s = "descriptor not found on characteristic. (desc: " + descriptorUuid + " chr: " + characteristicUuid + ")";
-            //result.error("writeDescriptor", s, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteDescriptor - "+s);
-            emitter.success(emitObject);
-            return false;
-        }
-
-        // check mtu
-        int mtu = mMtu.get(remoteId);
-        if ((mtu-3) < hexToBytes(value).length) {
-            String s = "data longer than mtu allows. dataLength: " +
-                    hexToBytes(value).length + "> max: " + (mtu-3);
-            //result.error("writeDescriptor", s, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "WriteDescriptor - "+s);
-            emitter.success(emitObject);
-            return false;
-        }
-
-        // write descriptor
-        if (Build.VERSION.SDK_INT >= 33) { // Android 13 (August 2022)
-
-            int rv = gatt.writeDescriptor(descriptor, hexToBytes(value));
-            if (rv != BluetoothStatusCodes.SUCCESS) {
-                String s = "gatt.writeDescriptor() returned " + rv + " : " + bluetoothStatusString(rv);
-                //result.error("writeDescriptor", s, null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteDescriptor - "+s);
-                emitter.success(emitObject);
-                return false;
-            }
-
-        } else {
-
-            // Set descriptor
-            if(!descriptor.setValue(hexToBytes(value))){
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "WriteDescriptor - descriptor set value returned false");
-                emitter.success(emitObject);
-                //result.error("writeDescriptor", "descriptor.setValue() returned false", null);
-                return false;
-            }
-
-            // Write descriptor
-            //result.error("writeDescriptor", "gatt.writeDescriptor() returned false", null);
-            return gatt.writeDescriptor(descriptor);
-        }
-        return true;
+    public void pingConnection() {
+        String string = "PNG";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
     }
 
-    @SuppressLint("MissingPermission")
-    public void setNotification(HashMap<String, Object> payloads){
-        // see: BmSetNotificationRequest
-        String remoteId =             (String) payloads.get("remote_id");
-        String serviceUuid =          (String) payloads.get("service_uuid");
-        String secondaryServiceUuid = (String) payloads.get("secondary_service_uuid");
-        String characteristicUuid =   (String) payloads.get("characteristic_uuid");
-        boolean enable =             (boolean) payloads.get("enable");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("setNotification", "device is disconnected", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "Notification - device already disconnected");
-            emitter.success(emitObject);
-            return;
-        }
-
-        // find characteristic
-        ChrFound found = locateCharacteristic(gatt, serviceUuid, secondaryServiceUuid, characteristicUuid);
-        if (found.error != null) {
-            //result.error("setNotification", found.error, null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "Notification - "+found.error);
-            emitter.success(emitObject);
-            return;
-        }
-
-        BluetoothGattCharacteristic characteristic = found.characteristic;
-
-        // configure local Android device to listen for characteristic changes
-        if(!gatt.setCharacteristicNotification(characteristic, enable)){
-            //result.error("setNotification", "gatt.setCharacteristicNotification(" + enable + ") returned false", null);
-            Map<String, Object> emitObject = new HashMap<>();
-            emitObject.put("type", "debug_message");
-            emitObject.put("data", "Notification - gatt set characteristics notification enabled: "+enable);
-            emitter.success(emitObject);
-            return;
-        }
-
-        // find cccd descriptor
-        BluetoothGattDescriptor cccd = getDescriptorFromArray(CCCD, characteristic.getDescriptors());
-        if(cccd == null) {
-            // Some ble devices do not actually need their CCCD updated.
-            // thus setCharacteristicNotification() is all that is required to enable notifications.
-            // The arduino "bluno" devices are an example.
-            String uuid = uuid128(characteristic.getUuid());
-            log(LogLevel.WARNING, "MapXHardWareConnector -  CCCD descriptor for characteristic not found: " + uuid);
-            //result.success(null);
-            return;
-        }
-
-        byte[] descriptorValue = null;
-
-        // determine value to write
-        if(enable) {
-
-            boolean canNotify = (characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0;
-            boolean canIndicate = (characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) > 0;
-
-            if(!canIndicate && !canNotify) {
-                //result.error("setNotification", "neither NOTIFY nor INDICATE properties are supported by this BLE characteristic", null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "Notification - device already disconnected");
-                emitter.success(emitObject);
-                return;
-            }
-
-            // If a characteristic supports both notifications and indications,
-            // we'll use notifications. This matches how CoreBluetooth works on iOS.
-            if(canIndicate) {descriptorValue = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE;}
-            if(canNotify)   {descriptorValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE;}
-
-        } else {
-            descriptorValue  = BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE;
-        }
-
-        // write descriptor
-        if (Build.VERSION.SDK_INT >= 33) { // Android 13 (August 2022)
-
-            int rv = gatt.writeDescriptor(cccd, descriptorValue);
-            if (rv != BluetoothStatusCodes.SUCCESS) {
-                String s = "gatt.writeDescriptor() returned " + rv + " : " + bluetoothStatusString(rv);
-                //result.error("setNotification", s, null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "Notification - device already disconnected");
-                emitter.success(emitObject);
-                return;
-            }
-
-        } else {
-
-            // set new value
-            if (!cccd.setValue(descriptorValue)) {
-                //result.error("setNotification", "cccd.setValue() returned false", null);
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "Notification - device already disconnected");
-                emitter.success(emitObject);
-                return;
-            }
-
-            // update notifications on remote BLE device
-            if (!gatt.writeDescriptor(cccd)) {
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "debug_message");
-                emitObject.put("data", "Notification - device already disconnected");
-                emitter.success(emitObject);
-                //result.error("setNotification", "gatt.writeDescriptor() returned false", null);
-                return;
-            }
-        }
+    public void getDeviceInfo() {
+        String string = "GDI";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
     }
 
-    @SuppressLint("MissingPermission")
-    public void requestMtu(HashMap<String, Object> payloads){
-        // see: BmMtuChangeRequest
-        String remoteId = (String) payloads.get("mac_address");
-        int mtu =            (int) payloads.get("mtu");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("requestMtu", "device is disconnected", null);
-            return;
-        }
-
-        // request mtu
-        if(!gatt.requestMtu(mtu)) {
-            //result.error("requestMtu", "gatt.requestMtu() returned false", null);
-            return;
-        }
+    public void takePoint() {
+        String string = "TPT";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
     }
 
-    @SuppressLint("MissingPermission")
-    public void requestConnectionPriority(HashMap<String, Object> payloads){
-        // see: BmConnectionPriorityRequest
-        String remoteId =     (String) payloads.get("mac_address");
-        int connectionPriority = (int) payloads.get("connection_priority");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("requestConnectionPriority", "device is disconnected", null);
-            return;
-        }
-
-        int cpInteger = bmConnectionPriorityParse(connectionPriority);
-
-        // request priority
-        if(!gatt.requestConnectionPriority(cpInteger)) {
-            //result.error("requestConnectionPriority", "gatt.requestConnectionPriority() returned false", null);
-            return;
-        }
+    public void endSession() {
+        String string = "ESS";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
     }
+
+    public void readBattery() {
+        String string = "BAR";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
+    }
+
+    public void shutDown() {
+        String string = "SHD";
+        byte[] data = string.getBytes();
+        connections.get(lastConnectedDevice).write(data);
+    }
+
+    private boolean isNumber(String s) {
+        return s != null && !s.isEmpty() && s.chars().allMatch(Character::isDigit);
+    }
+
+    private boolean hasTimeFormat(String input) {
+        Pattern timeRegex = Pattern.compile("^\\d{1,2}:\\d{1,2}:\\d{1,2}$");
+        return timeRegex.matcher(input).matches();
+    }
+
+    private boolean hasCoordinatesFormat(String input) {
+        Pattern coordinatesRegex = Pattern.compile("\\$,\\d+\\.\\d+,\\d+\\.\\d+,\\d{1,2}/\\d{1,2}/\\d{4},\\d{1,2}:\\d{1,2}:\\d{1,2}");
+        return coordinatesRegex.matcher(input).matches();
+    }
+
+    private boolean hasCoordinatesWithHashFormat(String input) {
+        Pattern coordinatesRegex = Pattern.compile("\\#,\\$,\\d+\\.\\d+,\\d+\\.\\d+,\\d{1,2}/\\d{1,2}/\\d{4},\\d{1,2}:\\d{1,2}:\\d{1,2}");
+        return coordinatesRegex.matcher(input).matches();
+    }
+
 
     public void clearGattCache(String macAddress) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         // check connection
@@ -1072,31 +965,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         final Method refreshMethod = gatt.getClass().getMethod("refresh");
         refreshMethod.invoke(gatt);
     }
-
-    @SuppressLint("MissingPermission")
-    public void setPreferredPhy(HashMap<String, Object> payloads){
-        if(Build.VERSION.SDK_INT < 26) { // Android 8.0 (August 2017)
-            //result.error("setPreferredPhy", "Only supported on devices >= API 26. This device == " + Build.VERSION.SDK_INT, null);
-            return;
-        }
-
-        // see: BmPreferredPhy
-        String remoteId = (String) payloads.get("remote_id");
-        int txPhy =          (int) payloads.get("tx_phy");
-        int rxPhy =          (int) payloads.get("rx_phy");
-        int phyOptions =     (int) payloads.get("phy_options");
-
-        // check connection
-        BluetoothGatt gatt = mConnectedDevices.get(remoteId);
-        if(gatt == null) {
-            //result.error("setPreferredPhy", "device is disconnected", null);
-            return;
-        }
-
-        // set preferred phy
-        gatt.setPreferredPhy(txPhy, rxPhy, phyOptions);
-    }
-
 
     //////////////////////////////////////////////////////////////////////////////////////
     // ██████   ███████  ██████   ███    ███  ██  ███████  ███████  ██   ██████   ███    ██
@@ -1183,103 +1051,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     // ██    ██     ██     ██  ██       ███████
     // ██    ██     ██     ██  ██            ██
     //  ██████      ██     ██  ███████  ███████
-
-    class ChrFound {
-        public BluetoothGattCharacteristic characteristic;
-        public String error;
-
-        public ChrFound(BluetoothGattCharacteristic characteristic, String error) {
-            this.characteristic = characteristic;
-            this.error = error;
-        }
-    }
-
-    private ChrFound locateCharacteristic(BluetoothGatt gatt,
-                                                 String serviceId,
-                                                 String secondaryServiceId,
-                                                 String characteristicId)
-    {
-        // primary
-        BluetoothGattService primaryService = getServiceFromArray(serviceId, gatt.getServices());
-        if(primaryService == null) {
-            return new ChrFound(null, "service not found '" + serviceId + "'");
-        }
-
-        // secondary
-        BluetoothGattService secondaryService = null;
-        if(secondaryServiceId != null && secondaryServiceId.length() > 0) {
-            secondaryService = getServiceFromArray(serviceId, primaryService.getIncludedServices());
-            if(secondaryService == null) {
-                return new ChrFound(null, "secondaryService not found '" + secondaryServiceId + "'");
-            }
-        }
-
-        // which service?
-        BluetoothGattService service = (secondaryService != null) ? secondaryService : primaryService;
-
-        // characteristic
-        BluetoothGattCharacteristic characteristic = getCharacteristicFromArray(characteristicId, service.getCharacteristics());
-        if(characteristic == null) {
-            return new ChrFound(null, "characteristic not found in service " + 
-                "(chr: '" + characteristicId + "' svc: '" + serviceId + "')");
-        }
-
-        return new ChrFound(characteristic, null);
-    }
-
-    private BluetoothGattService getServiceFromArray(String uuid, List<BluetoothGattService> array)
-    {
-        for (BluetoothGattService s : array) {
-            if (uuid128(s.getUuid()).equals(uuid)) {
-                return s;
-            }
-        }
-        return null;
-    }
-
-    private BluetoothGattCharacteristic getCharacteristicFromArray(String uuid, List<BluetoothGattCharacteristic> array)
-    {
-        for (BluetoothGattCharacteristic c : array) {
-            if (uuid128(c.getUuid()).equals(uuid)) {
-                return c;
-            }
-        }
-        return null;
-    }
-
-    private BluetoothGattDescriptor getDescriptorFromArray(String uuid, List<BluetoothGattDescriptor> array)
-    {
-        for (BluetoothGattDescriptor d : array) {
-            if (uuid128(d.getUuid()).equals(uuid)) {
-                return d;
-            }
-        }
-        return null;
-    }
-
-    private int getMaxPayload(String remoteId, int writeType, boolean allowLongWrite)
-    {
-        // 512 this comes from the BLE spec. Characteritics should not 
-        // be longer than 512. Android also enforces this as the maximum in internal code.
-        int maxAttrLen = 512; 
-
-        // if no response, we can only write up to MTU-3. 
-        // This is the same limitation as iOS, and ensures transfer reliability.
-        if (writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE || allowLongWrite == false) {
-
-            // get mtu
-            Integer mtu = mMtu.get(remoteId);
-            if (mtu == null) {
-                mtu = 23; // 23 is the minumum MTU, as per the BLE spec
-            }
-
-            return Math.min(mtu - 3, maxAttrLen);
-
-        } else {
-            // if using withResponse, android will auto split up to the maxAttrLen.
-            return maxAttrLen;
-        }
-    }
 
     @SuppressLint("MissingPermission")
     private void disconnectAllDevices(boolean alsoClose)
@@ -1456,6 +1227,10 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                     emitObject.put("data", rr);
                     emitter.success(emitObject);
 
+                    if(lastConnectedDevice != null && device.getAddress().equals(lastConnectedDevice)){
+                        stopBluetoothAdapterScan();
+                        connectToBluetoothDevice(lastConnectedDevice, true);
+                    }
                     //invokeMethodUIThread("OnScanResponse", response);
                 }
 
@@ -1532,7 +1307,12 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 mConnectedDevices.put(remoteId, gatt);
 
                 // default minimum mtu
-                mMtu.put(remoteId, 23); 
+                mMtu.put(remoteId, 23);
+
+                if(remoteId.equals(lastConnectedDevice)){
+                    boolean hasDiscoveredServices = discoverServices(remoteId);
+                    log(LogLevel.DEBUG, "MapXHardWareConnector -  discovering services onConnectionStateChanged - "+hasDiscoveredServices);
+                }
             }
 
             // disconnected?
@@ -1541,6 +1321,9 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 // remove from connected devices
                 mConnectedDevices.remove(remoteId);
 
+                if(remoteId.equals(lastConnectedDevice)){
+                    currentlyConnectedBluetoothGatt = null;
+                }
                 // we cannot call 'close' for autoconnect
                 // because it prevents autoconnect from working
                 if (mAutoConnect.get(remoteId) == null || mAutoConnect.get(remoteId) == false) {
@@ -1565,6 +1348,17 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status)
         {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                // Services discovered, you can now interact with characteristics
+                // Find the service and characteristics you want to interact with
+                BluetoothGattService service = gatt.getService(UUID.fromString("Service UUID"));
+                currentlyConnectedWriteCharacteristic = service.getCharacteristic(UUID.fromString("Write Characteristic UUID"));
+                currentlyConnectedReadCharacteristic = service.getCharacteristic(UUID.fromString("Read Characteristic UUID"));
+
+            } else {
+                // Handle service discovery failure
+            }
+
             log(LogLevel.DEBUG, "MapXHardWareConnector -  onServicesDiscovered: count: " + gatt.getServices().size() + " status: " + status);
 
             List<Object> services = new ArrayList<Object>();
@@ -1831,14 +1625,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         return map;
     }
 
-    HashMap<String, Object> bmScanResult(BluetoothDevice device, ScanResult result) {
-        HashMap<String, Object> map = new HashMap<>();
-        map.put("device", bmBluetoothDevice(device));
-        map.put("rssi", result.getRssi());
-        map.put("advertisement_data", bmAdvertisementData(result));
-        return map;
-    }
-
     @SuppressLint("MissingPermission")
     HashMap<String, Object> deviceScanResult(BluetoothDevice device, ScanResult result) {
 
@@ -1869,7 +1655,12 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         }else{
             map.put("name", device.getName());
         }
-        map.put("isConnected", device.getBondState() == BluetoothDevice.BOND_BONDED);
+
+        if(connections.containsKey(device.getAddress())){
+            map.put("isConnected", device.getAddress().equals(lastConnectedDevice));
+        }else{
+            map.put("isConnected", false);
+        }
         map.put("isConnectable", true);
         map.put("type", device.getType());
         return map;

@@ -3,6 +3,7 @@ package com.afex.mapx
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.util.Log
@@ -11,6 +12,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
 import kotlin.concurrent.thread
+
 
 private const val TAG = "ConnectThread"
 
@@ -25,28 +27,47 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
     private val messageReadBattery = 5
     private val messageShutDown = 6
     private val messageDeviceInfo = 7
+    private val messageSocketClosed = 8
 
-    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
-        device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
-    }
+//    private var mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
+//        device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+//    }
 
     private lateinit var mmInStream: InputStream
     private lateinit var mmOutStream: OutputStream
     private lateinit var mmBuffer: ByteArray // mmBuffer store for the stream
 
+    private var mmSocket: BluetoothSocket? = null
     override fun run() {
-        mmSocket?.let { socket ->
-            // Connect to the remote device through the socket. This call blocks
-            // until it succeeds or throws an exception.
-            socket.connect()
+        try {
+            mmSocket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
+            mmSocket?.let { socket ->
+                // Connect to the remote device through the socket. This call blocks
+                // until it succeeds or throws an exception.
+                socket.connect()
 
-            mmInStream = socket.inputStream
-            mmOutStream = socket.outputStream
-            mmBuffer = ByteArray(1024)
+                mmInStream = socket.inputStream
+                mmOutStream = socket.outputStream
+                mmBuffer = ByteArray(1024)
 
-            // The connection attempt succeeded. Perform work associated with
-            // the connection in a separate thread.
-            thread { read() }
+                // The connection attempt succeeded. Perform work associated with
+                // the connection in a separate thread.
+                thread { read() }
+            }
+        }catch (closeException: Exception) {
+            if(closeException.localizedMessage == "read failed, socket might closed or timeout, read ret: -1"){
+                val readMsg = handler.obtainMessage(
+                    messageSocketClosed, 0, -1,
+                    MessageObject(
+                        device,
+                        listOf<UByte>(),
+                        "read failed, socket might closed or timeout, read ret: -1"
+                    )
+                )
+                readMsg.sendToTarget()
+            }
+            Log.e(TAG, "Could not close the client socket. ${closeException.localizedMessage}")
+            Log.e(TAG, "${closeException.printStackTrace()}")
         }
     }
 
@@ -193,6 +214,7 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
             Log.e(TAG, "Could not close the client socket", e)
         }
     }
+
 }
 
 data class MessageObject(val device: BluetoothDevice, val data: Any, val dataMessage: String)
