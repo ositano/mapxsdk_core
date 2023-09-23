@@ -88,13 +88,14 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
                 Log.d(TAG, "Input stream was disconnected", e)
                 break
             }
-            // Log.d(TAG, "read streams: $numBytes")
+            Log.d(TAG, "read streams: $numBytes")
             //readMessage += String(mmBuffer, 0, numBytes)
             readMessage.append(String(mmBuffer, 0, numBytes))
-            //Log.d(TAG, "  <<<*>>> read data: $readMessage")
+            Log.d(TAG, "  <<<*>>> read data: $readMessage")
             received = mmBuffer.sliceArray(IntRange(0, numBytes - 1)).map { it.toUByte() }
             //Log.d(TAG, "  <<< ${received.joinToString { "$it" }}")
             val lastMessage = String(mmBuffer, 0, numBytes);
+            Log.d(TAG, lastMessage)
 
             if (isNumber(lastMessage)){ ///likely a battery level
                 val readMsg = handler.obtainMessage(
@@ -106,7 +107,8 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
                     )
                 )
                 readMsg.sendToTarget()
-            }else if (lastMessage.contains("MAPX")){
+            }
+            else if (lastMessage.contains("MAPX")){
                 val readMsg = handler.obtainMessage(
                     messageDeviceInfo, numBytes, -1,
                     MessageObject(

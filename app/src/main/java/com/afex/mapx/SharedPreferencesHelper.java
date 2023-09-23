@@ -14,7 +14,7 @@ public class SharedPreferencesHelper {
         sharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
-    public void lastConnectedDevice(String uuid){;
+    public void saveLastConnectedDevice(String uuid){;
         sharedPreferences.edit().putString(LAST_UUID_KEY, uuid).apply();
     }
 
