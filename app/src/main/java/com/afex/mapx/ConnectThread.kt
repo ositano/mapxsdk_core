@@ -88,14 +88,15 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
                 Log.d(TAG, "Input stream was disconnected", e)
                 break
             }
-            Log.d(TAG, "read streams: $numBytes")
+
+            //Log.d(TAG, "read streams: $numBytes")
             //readMessage += String(mmBuffer, 0, numBytes)
             readMessage.append(String(mmBuffer, 0, numBytes))
-            Log.d(TAG, "  <<<*>>> read data: $readMessage")
+            //Log.d(TAG, "  <<<*>>> read data: $readMessage")
             received = mmBuffer.sliceArray(IntRange(0, numBytes - 1)).map { it.toUByte() }
             //Log.d(TAG, "  <<< ${received.joinToString { "$it" }}")
             val lastMessage = String(mmBuffer, 0, numBytes);
-            Log.d(TAG, lastMessage)
+            Log.d(TAG, "last message: $lastMessage")
 
             if (isNumber(lastMessage)){ ///likely a battery level
                 val readMsg = handler.obtainMessage(
@@ -202,7 +203,12 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
 
         // Share the sent message with the UI activity.
         val writtenMsg = handler.obtainMessage(
-            messageWrite, -1, -1, mmBuffer
+            messageWrite, -1, -1,
+            MessageObject(
+                device,
+                listOf<UByte>(),
+                String(bytes),
+            ),
         )
         writtenMsg.sendToTarget()
     }
@@ -210,10 +216,24 @@ class ConnectThread(private val handler: Handler, private val device: BluetoothD
     // Closes the client socket and causes the thread to finish.
     fun cancel() {
         try {
+            mmInStream.close()
+            mmOutStream.flush()
+            mmOutStream.close()
             mmSocket?.close()
             //Log.d(TAG, "Connect thread - closed")
         } catch (e: IOException) {
             Log.e(TAG, "Could not close the client socket", e)
+            if(e.localizedMessage == "read failed, socket might closed or timeout, read ret: -1"){
+                val readMsg = handler.obtainMessage(
+                    messageSocketClosed, 0, -1,
+                    MessageObject(
+                        device,
+                        listOf<UByte>(),
+                        "read failed, socket might closed or timeout, read ret: -1"
+                    )
+                )
+                readMsg.sendToTarget()
+            }
         }
     }
 
