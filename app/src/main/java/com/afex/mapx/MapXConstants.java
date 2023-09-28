@@ -16,4 +16,15 @@ public class MapXConstants {
     public static final int  messageReadFailed = 11;
     public static final int  messageWriteFailed = 12;
 
+
+
+
+    public static final String PREFS_NAME = "MapXPreferences";
+    public static final String LAST_UUID_KEY = "00001110000";
+    public static final String LAST_NAME_KEY = "111000100";
+    public static final String API_KEY = "010101";
+    public static final String SECRET_KEY = "100100";
+    public static final String LICENSE_KEY = "100000";
+    public static final String IS_LICENSE_VALID = "110000";
+
 }

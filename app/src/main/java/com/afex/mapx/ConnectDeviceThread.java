@@ -17,6 +17,8 @@ import com.afex.mapx.models.MapXBluetoothMessage;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A thread that connects to a remote device over Bluetooth, and reads/writes data
@@ -200,8 +202,8 @@ public class ConnectDeviceThread extends Thread {
      * Pass a message to the read handler.
      */
     private void sendToReadHandler(String s) {
-        respondToBluetoothMessage(s);
-        Log.i(TAG, "[RECV] " + s);
+        respondToBluetoothMessage(s.trim());
+        Log.i(TAG, "[RECV] " + s.trim());
     }
 
     /**
@@ -302,19 +304,10 @@ public class ConnectDeviceThread extends Thread {
         return s != null && !s.isEmpty() && s.chars().allMatch(Character::isDigit);
     }
 
-    private static boolean hasTimeFormat(String input) {
-        String timeRegex = "^\\d{1,2}:\\d{1,2}:\\d{1,2}$";
-        return input.matches(timeRegex);
-    }
-
     private static boolean hasCoordinatesFormat(String input) {
-        String coordinatesRegex = "\\$,\\d+\\.\\d+,\\d+\\.\\d+,\\d{1,2}/\\d{1,2}/\\d{4},\\d{1,2}:\\d{1,2}:\\d{1,2}";
-        return input.matches(coordinatesRegex);
-    }
-
-    private static boolean hasCoordinatesWithHashFormat(String input) {
-        String coordinatesRegex = "\\#,\\$,\\d+\\.\\d+,\\d+\\.\\d+,\\d{1,2}/\\d{1,2}/\\d{4},\\d{1,2}:\\d{1,2}:\\d{1,2}";
-        return input.matches(coordinatesRegex);
+        Pattern pattern = Pattern.compile("^\\d+\\.\\d+,\\d+\\.\\d+,\\d{1,2}/\\d{1,2}/\\d{4},\\d{1,2}:\\d{1,2}:\\d{1,2}$");
+        Matcher matcher = pattern.matcher(input);
+        return matcher.matches();
     }
 
     private void respondToBluetoothMessage(String lastMessage){
@@ -356,9 +349,9 @@ public class ConnectDeviceThread extends Thread {
             );
             readMsg.sendToTarget();
         }else{
-            //Log.d(TAG, "  <<<*>>> read data 2: $lastMessage")
-            if(hasCoordinatesFormat(lastMessage)  || hasCoordinatesWithHashFormat(lastMessage)){
-                //Log.d(TAG, "  <<<*>>> sending data 1 .... : $lastMessage")
+            Log.d(TAG, "  <<<*>>> reading coordinates : "+lastMessage);
+            if(hasCoordinatesFormat(lastMessage)){
+                Log.d(TAG, "  <<<*>>> data has coordinate format >>>>>>>>");
                 Message readMsg = handler.obtainMessage(
                         MapXConstants.messageTakePoint, -1, -1,
                         new MapXBluetoothMessage(

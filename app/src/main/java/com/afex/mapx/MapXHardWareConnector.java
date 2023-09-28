@@ -83,6 +83,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
     private String licenseKey;
     private Boolean isLicenseValid;
+    private Boolean currentLicenseValidity = false;
     private String serviceUUID;
     //private String connectedUUID;
     private boolean hasBluetoothPermissionBeenGranted = false;
@@ -143,7 +144,13 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             }
         };
 
-        lastConnectedDevice = sharedPreferencesHelper.getLastConnectedDevice();
+        currentLicenseValidity = sharedPreferencesHelper.isLicenseValid();
+        if(currentLicenseValidity){
+            isLicenseValid = true;
+            licenseKey = sharedPreferencesHelper.getLicenseKey();
+            lastConnectedDevice = sharedPreferencesHelper.getLastConnectedDevice();
+        }
+
 
         IntentFilter filterAdapter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         this.context.registerReceiver(mBluetoothAdapterStateReceiver, filterAdapter);
@@ -158,7 +165,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             mBluetoothAdapter = mBluetoothManager != null ? mBluetoothManager.getAdapter() : null;
         }
 
-        if(lastConnectedDevice != null && !lastConnectedDevice.isEmpty()){
+        if(lastConnectedDevice != null && !lastConnectedDevice.isEmpty() && currentLicenseValidity){
             connectToBluetoothDevice(lastConnectedDevice);
         }
     }
@@ -222,6 +229,19 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         this.licenseKey = licenseKey;
         boolean licenseStatus = MapXLicense.INSTANCE.isLicenseValid(licenseKey);
         isLicenseValid = licenseStatus;
+        if(licenseStatus) {
+            sharedPreferencesHelper.saveLicenseKey(licenseKey);
+            sharedPreferencesHelper.setLicenseValid(true);
+            String licenseInfo = MapXLicense.INSTANCE.getLicenseAPIInfo(licenseKey);
+            String[] infoList = licenseInfo.split("\n");
+            sharedPreferencesHelper.saveApiKey(infoList[0]);
+            sharedPreferencesHelper.saveSecretKey(infoList[1]);
+        }else{
+            sharedPreferencesHelper.saveLicenseKey(null);
+            sharedPreferencesHelper.setLicenseValid(false);
+            sharedPreferencesHelper.saveApiKey("");
+            sharedPreferencesHelper.saveSecretKey("");
+        }
         return licenseStatus;
     }
 
@@ -708,14 +728,14 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             currentlyConnectedDevice = null;
             Log.d(TAG, "We're good to go ....");
             BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(uuid);
-            if (device != null) {
-                Map<String, Object> emitObject = new HashMap<>();
-                emitObject.put("type", "adapterConnection");
-                emitObject.put("status", true);
-                emitObject.put("data", bmBluetoothDevice(device));
-                emitter.success(emitObject);
-                return;
-            }
+            HashMap<String, Object> deviceMap= bmBluetoothDevice(device);
+            deviceMap.put("isConnected", false);
+
+            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.put("type", "adapterConnection");
+            emitObject.put("status", true);
+            emitObject.put("data", deviceMap);
+            emitter.success(emitObject);
         }
     }
 
@@ -891,6 +911,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             case MapXConstants.messageSocketConnected:
                 // Handle connected device
                 currentlyConnectedDevice = message.getDevice().getAddress();
+                deviceMap.put("isConnected", true);
                 Log.d(TAG, "bluetooth device connected");
                 sharedPreferencesHelper.saveLastConnectedDevice(currentlyConnectedDevice);
                 emitObject.put("type", "adapterConnection");
@@ -922,8 +943,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                     if(currentConnection != null){
                         currentConnection.close();
                         disconnectDevice(message.getDevice().getAddress());
-                    }else{
-
                     }
                 }
                 break;
@@ -959,6 +978,14 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 takePointResponse.put("data", deviceMap);
                 takePointResponse.put("message", message.getDataMessage());
                 emitter.success(takePointResponse);
+
+                String[] capturedPointList = message.getDataMessage().trim().split(",");
+                double latitude = Double.parseDouble(capturedPointList[0]);
+                double longitude = Double.parseDouble(capturedPointList[1]);
+                List<Double> pointList = new ArrayList<>();
+                pointList.add(latitude);
+                pointList.add(longitude);
+                capturedCoordinates.add(pointList);
                 break;
 
             case MapXConstants.messageEndSession:
@@ -1036,8 +1063,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
         if(currentConnection != null){
             currentConnection.write(data);
-        }else{
-
         }
     }
 
@@ -1048,8 +1073,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
         if(currentConnection != null){
             currentConnection.write(data);
-        }else{
-
         }
     }
 
@@ -1060,8 +1083,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
         if(currentConnection != null){
             currentConnection.write(data);
-        }else{
-
         }
     }
 
@@ -1071,8 +1092,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
         if(currentConnection != null){
             currentConnection.write(data);
-        }else{
-
         }
     }
 
@@ -1082,8 +1101,6 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
         if(currentConnection != null){
             currentConnection.write(data);
-        }else{
-
         }
     }
 

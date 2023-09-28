@@ -1,15 +1,17 @@
 package com.afex.mapx.storage;
 
+import static com.afex.mapx.MapXConstants.API_KEY;
+import static com.afex.mapx.MapXConstants.IS_LICENSE_VALID;
+import static com.afex.mapx.MapXConstants.LAST_NAME_KEY;
+import static com.afex.mapx.MapXConstants.LAST_UUID_KEY;
+import static com.afex.mapx.MapXConstants.LICENSE_KEY;
+import static com.afex.mapx.MapXConstants.PREFS_NAME;
+import static com.afex.mapx.MapXConstants.SECRET_KEY;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 
 public class SharedPreferencesHelper {
-    private static final String PREFS_NAME = "MyAppPreferences";
-
-    private static final String LAST_UUID_KEY = "last_uuids";
-    private static final String LAST_NAME_KEY = "last_name";
-    private static final String API_KEY = "010101";
-    private static final String SECRET_KEY = "100100";
 
     private final SharedPreferences sharedPreferences;
 
@@ -47,6 +49,24 @@ public class SharedPreferencesHelper {
 
     public String getSecretKey() {
         return sharedPreferences.getString(SECRET_KEY, null);
+    }
+
+
+    public void saveLicenseKey(String deviceName){;
+        sharedPreferences.edit().putString(LICENSE_KEY, deviceName).apply();
+    }
+
+    public String getLicenseKey() {
+        return sharedPreferences.getString(LICENSE_KEY, null);
+    }
+
+
+    public void setLicenseValid(boolean status){;
+        sharedPreferences.edit().putBoolean(IS_LICENSE_VALID, status).apply();
+    }
+
+    public boolean isLicenseValid() {
+        return sharedPreferences.getBoolean(IS_LICENSE_VALID, false);
     }
 }
 
