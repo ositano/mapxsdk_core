@@ -1,5 +1,7 @@
 package com.afex.mapx.models;
 
+import androidx.annotation.NonNull;
+
 import java.util.List;
 
 public class CoordinateData {
@@ -71,6 +73,11 @@ public class CoordinateData {
 
     public void setHardWareSerialNumber(String hardWareSerialNumber) {
         this.hardWareSerialNumber = hardWareSerialNumber;
+    }
+    @NonNull
+    @Override
+    public String toString(){
+        return String.format("{location_details: %s, hardware_serial_number: %s, date_created: %s, time_taken_to_map: %s}", coordinates.toString(), hardWareSerialNumber, datetime, timeToMap);
     }
 }
 

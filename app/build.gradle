@@ -86,60 +86,8 @@ publishing {
 //    }
 //}
 dependencies {
-
     implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'com.google.code.gson:gson:2.9.0'
+    ///implementation 'com.google.code.gson:gson:2.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    //implementation 'com.github.LeandroSQ:android-ble-made-easy:1.8.2'
-    //implementation "com.github.weliem:blessed-android:2.4.2"
-    //implementation 'androidx.appcompat:appcompat:1.6.1'
-    //implementation 'com.google.android.material:material:1.9.0'
-    //testImplementation 'junit:junit:4.13.2'
-    //androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    //androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-
-    //implementation project(':flutter')
-
-//    debugImplementation('com.afex.flutter_module:flutter_debug:1.0'){
-//        exclude group: 'io.flutter', module: 'flutter_embedding_debug'
-//        // Add more exclusions for the classes you want to exclude
-//        exclude group: 'io.flutter', module: 'flutter'
-//        exclude group: 'io.flutter', module: 'flutter_plugin'
-//        exclude group: 'io.flutter', module: 'BuildConfig'
-//        exclude group: 'io.flutter', module: 'FlutterInjector'
-//        exclude group: 'io.flutter', module: 'Log'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
-//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
-//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
-//    }
-//    profileImplementation('com.afex.flutter_module:flutter_profile:1.0'){
-//        exclude group: 'io.flutter', module: 'flutter_embedding_profile'
-//        // Add more exclusions for the classes you want to exclude
-//        exclude group: 'io.flutter', module: 'flutter'
-//        exclude group: 'io.flutter', module: 'flutter_plugin'
-//        exclude group: 'io.flutter', module: 'BuildConfig'
-//        exclude group: 'io.flutter', module: 'FlutterInjector'
-//        exclude group: 'io.flutter', module: 'Log'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
-//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
-//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
-//    }
-//    releaseImplementation('com.afex.flutter_module:flutter_release:1.0'){
-//        //exclude group: 'io.flutter', module: 'flutter_embedding_release'
-//        // Add more exclusions for the classes you want to exclude
-//        exclude group: 'io.flutter', module: 'flutter'
-//        exclude group: 'io.flutter', module: 'flutter_plugin'
-//        exclude group: 'io.flutter', module: 'BuildConfig'
-//        exclude group: 'io.flutter', module: 'FlutterInjector'
-//        exclude group: 'io.flutter', module: 'Log'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivity'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityDelegate'
-//        exclude group: 'io.flutter.app', module: 'FlutterActivityEvents'
-//        exclude group: 'io.flutter.app', module: 'FlutterApplication'
-//        exclude group: 'io.flutter.app', module: 'FlutterFragmentActivity'
-//    }
+    implementation files('../libs/gson-2.9.0.jar')
 }

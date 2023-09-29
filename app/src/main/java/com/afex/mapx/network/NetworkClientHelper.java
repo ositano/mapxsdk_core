@@ -3,6 +3,8 @@ package com.afex.mapx.network;
 import android.os.AsyncTask;
 import android.util.Log;
 
+import com.afex.mapx.AsyncTasks;
+import com.afex.mapx.HashHelper;
 import com.afex.mapx.models.CoordinateData;
 import com.afex.mapx.models.DeviceInfo;
 
@@ -33,9 +35,9 @@ public class NetworkClientHelper {
         new SendDataTask(isDebug, apiKey, hashKey, coordinateData, listener).execute();
     }
 
-    private static class SendDataTask extends AsyncTask<Void, Void, String> {
+    private static class SendDataTask extends AsyncTasks {
         private final String apiKey;
-        private final String hashKey;
+        private final String secretKey;
         private final boolean isDebug;
         private final ResponseListener listener;
         private final CoordinateData coordinateData;
@@ -60,9 +62,9 @@ public class NetworkClientHelper {
             ],
           }
          */
-        SendDataTask(boolean isDebug, String apiKey, String hashKey, CoordinateData coordinateData, ResponseListener listener) {
+        SendDataTask(boolean isDebug, String apiKey, String secretKey, CoordinateData coordinateData, ResponseListener listener) {
             this.apiKey = apiKey;
-            this.hashKey = hashKey;
+            this.secretKey = secretKey;
             this.listener = listener;
             this.isDebug = isDebug;
             this.coordinateData = coordinateData;
@@ -81,7 +83,12 @@ public class NetworkClientHelper {
         }
 
         @Override
-        protected String doInBackground(Void... voids) {
+        public void onPreExecute(){
+
+        }
+
+        @Override
+        public String doInBackground() {
             HttpURLConnection connection = null;
             InputStream inputStream = null;
             BufferedReader reader = null;
@@ -103,14 +110,19 @@ public class NetworkClientHelper {
                 URL url = new URL(isDebug ? "https://mapx.afex.dev/api/captures/add" : "https://mapx.afex.com/api/captures/add");
                 connection = (HttpURLConnection) url.openConnection();
 
+                String requestTs = ""+System.currentTimeMillis();
+                String data = apiKey+ secretKey + requestTs;
+                String hashKey = HashHelper.getSha256Hash(data);
+
                 // Set up the HTTP POST request
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);
                 connection.setRequestProperty("api-key", apiKey);
                 connection.setRequestProperty("hash-key", hashKey);
-                connection.setRequestProperty("request-ts", hashKey);
+                connection.setRequestProperty("request-ts", requestTs);
                 connection.setRequestProperty("Content-Type", "application/json");
 
+                Log.d(TAG, connection.getRequestProperties().toString());
                 Log.d(TAG, jsonObject.toString());
                 // Write the request data to the server
                 OutputStream outputStream = connection.getOutputStream();
@@ -155,7 +167,7 @@ public class NetworkClientHelper {
         }
 
         @Override
-        protected void onPostExecute(String response) {
+        public void onPostExecute(String response) {
             if (response != null) {
                 if (response.startsWith("HTTP Error Code")) {
                     listener.onError(response);

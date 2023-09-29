@@ -574,12 +574,19 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     public void connectToBluetoothDevice(String macAddress) throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
         checkLicense();
         BluetoothDevice bluetoothDevice = mBluetoothAdapter.getRemoteDevice(macAddress);
+        HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
+
+        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.put("type", "adapterConnection");
+        emitObject.put("status", true);
+        emitObject.put("connection_status", "CONNECTING");
+        emitObject.put("data", deviceMap);
+        emitter.success(emitObject);
 
         if(bluetoothDevice != null && bluetoothDevice.getType() == BluetoothDevice.DEVICE_TYPE_CLASSIC){
             connectToDeviceInternal(bluetoothDevice);
             return;
         }
-        HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
         ArrayList<String> permissions = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= 31) { // Android 12 (October 2021)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
@@ -587,13 +594,13 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         //make sure to check for bluetooth connect permission before proceeding
         ensurePermissions(permissions, (granted, perm) -> {
             if (!granted) {
-                Map<String, Object> emitObject = new HashMap<>();
+                emitObject.clear();
                 emitObject.put("type", "adapterConnection");
                 emitObject.put("data", deviceMap);
                 emitObject.put("status", false);
+                emitObject.put("connection_status", "DISCONNECTED");
                 emitObject.put("error", String.format("Grant %s permission", perm));
                 emitter.success(emitObject);
-                return;
             }
         });
 
@@ -604,9 +611,10 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         BluetoothGatt gatt = mConnectedDevices.get(macAddress);
         if (gatt != null) {
             log(LogLevel.DEBUG, "MapXHardWareConnector -  already connected");
-            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.clear();
             emitObject.put("type", "adapterConnection");
             emitObject.put("status", true);
+            emitObject.put("connection_status", "CONNECTED");
             emitObject.put("data", deviceMap);
             emitter.success(emitObject);
             return;
@@ -619,9 +627,10 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
         // error check
         if (gatt == null) {
-            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.clear();
             emitObject.put("type", "adapterConnection");
             emitObject.put("status", false);
+            emitObject.put("connection_status", "DISCONNECTED");
             emitObject.put("data", deviceMap);
             emitObject.put("error", "Unable to connect");
             emitter.success(emitObject);
@@ -630,9 +639,10 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
         log(LogLevel.DEBUG, "MapXHardWareConnector -  established connection - "+gatt.toString());
         deviceMap.put("isConnected", true);
-        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.clear();
         emitObject.put("type", "adapterConnection");
         emitObject.put("status", true);
+        emitObject.put("connection_status", "CONNECTED");
         emitObject.put("data", deviceMap);
         emitter.success(emitObject);
         sharedPreferencesHelper.saveLastConnectedDevice(device.getAddress());
@@ -658,11 +668,11 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
         try {
             connection.start();
-            return;
         } catch (Exception exception) {
             Map<String, Object> emitObject = new HashMap<>();
             emitObject.put("type", "adapterConnection");
-            emitObject.put("status", true);
+            emitObject.put("status", false);
+            emitObject.put("connection_status", "DISCONNECTED");
             emitObject.put("data", deviceMap);
             emitObject.put("error", exception.getLocalizedMessage());
             emitter.success(emitObject);
@@ -677,16 +687,23 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     public void disconnectFromBluetoothDevice(String macAddress) throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
         checkLicense();
         BluetoothDevice bluetoothDevice = mBluetoothAdapter.getRemoteDevice(macAddress);
+        HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
+        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.put("type", "adapterConnection");
+        emitObject.put("status", false);
+        emitObject.put("connection_status", "DISCONNECTING");
+        emitObject.put("data", deviceMap);
+        emitter.success(emitObject);
+
         if(bluetoothDevice != null && bluetoothDevice.getType() == BluetoothDevice.DEVICE_TYPE_CLASSIC){
             disconnectDevice(macAddress);
             return;
         }
 
-        HashMap<String, Object> deviceMap = bmBluetoothDevice(bluetoothDevice);
         // already disconnected?
         BluetoothGatt gatt = mConnectedDevices.get(macAddress);
         if (gatt == null) {
-            Map<String, Object> emitObject = new HashMap<>();
+            emitObject.clear();
             emitObject.put("type", "debug_message");
             emitObject.put("data", "Disconnect - device already disconnected");
             emitter.success(emitObject);
@@ -694,6 +711,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             Map<String, Object> responseObject = new HashMap<>();
             responseObject.put("type", "adapterConnection");
             responseObject.put("status", false);
+            emitObject.put("connection_status", "DISCONNECTED");
             responseObject.put("data", deviceMap);
             responseObject.put("error", "Disconnect - device already disconnected");
             emitter.success(responseObject);
@@ -706,12 +724,12 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         mAutoConnect.put(macAddress, false);
         gatt.disconnect();
 
-        Map<String, Object> emitObject = new HashMap<>();
+        emitObject.clear();
         emitObject.put("type", "adapterConnection");
         emitObject.put("status", false);
+        emitObject.put("connection_status", "DISCONNECTED");
         emitObject.put("data", deviceMap);
         emitter.success(emitObject);
-        return;
     }
 
     public void disconnectDevice(String uuid) throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
@@ -733,7 +751,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
 
             Map<String, Object> emitObject = new HashMap<>();
             emitObject.put("type", "adapterConnection");
-            emitObject.put("status", true);
+            emitObject.put("status", false);
+            emitObject.put("connection_status", "DISCONNECTED");
             emitObject.put("data", deviceMap);
             emitter.success(emitObject);
         }
@@ -924,11 +943,15 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 break;
             case MapXConstants.messageWrite:
                 // Handle received data
-                if(message.getDataMessage().equals("ESS")){ ///handles end session
+                Log.d(TAG, "checking this ending a session: "+message.getDataMessage());
+                if(message.getDataMessage().trim().equals("ESS")){ ///handles end session
+                    Log.d(TAG, "ending a session: ");
                     String apiKey = sharedPreferencesHelper.getApiKey();
                     String secretKey = sharedPreferencesHelper.getSecretKey();
                     String endCaptureTime = getCurrentDateTime();
                     String timeToMap = calculateTimeDifference(startCaptureTime, endCaptureTime);
+
+                    Log.d(TAG, "api key: "+apiKey+", secret key: "+secretKey);
 
                     CoordinateData coordinateData = new CoordinateData();
                     coordinateData.setCoordinates(capturedCoordinates);
@@ -936,14 +959,16 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                     coordinateData.setHardWareSerialNumber(hardWareSerialNumber);
                     coordinateData.setTimeToMap(timeToMap);
                     coordinateData.setHasSynced(false);
+
                     sqliteHelper.insertCoordinate(coordinateData);
-                    NetworkClientHelper.sendDataToServer(true, apiKey, secretKey, coordinateData, networkResponseListener);
 
                     ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
                     if(currentConnection != null){
                         currentConnection.close();
                         disconnectDevice(message.getDevice().getAddress());
                     }
+                    Log.d(TAG, "sending data to the server: "+coordinateData.toString());
+                    NetworkClientHelper.sendDataToServer(true, apiKey, secretKey, coordinateData, networkResponseListener);
                 }
                 break;
             case MapXConstants.messageRead:
@@ -960,6 +985,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 currentlyConnectedDevice = message.getDevice().getAddress();
                 emitObject.put("type", "adapterConnection");
                 emitObject.put("status", true);
+                emitObject.put("connection_status", "CONNECTED");
                 emitObject.put("data", deviceMap);
                 emitter.success(emitObject);
 

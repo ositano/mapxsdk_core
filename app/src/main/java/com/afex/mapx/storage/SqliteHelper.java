@@ -9,6 +9,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import com.afex.mapx.models.CoordinateData;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
@@ -48,12 +49,14 @@ public class SqliteHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    public long insertCoordinate(CoordinateData coordinateData) {
+    public void insertCoordinate(CoordinateData coordinateData) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
 
         // Convert the coordinates list to a JSON string
-        Gson gson = new Gson();
+        GsonBuilder gsonBuilder = new GsonBuilder();// register type adapters here, specify field naming policy, etc.
+        Gson gson = gsonBuilder.create();
+        //Gson gson = new Gson();
         String coordinatesJson = gson.toJson(coordinateData.getCoordinates());
         int itemId = coordinateData.getCoordinates().hashCode();
         values.put(COLUMN_ID, itemId);
@@ -64,7 +67,6 @@ public class SqliteHelper extends SQLiteOpenHelper {
         values.put(COLUMN_SENT_TO_SERVER, coordinateData.isHasSynced() ? 1 : 0);
         long id = db.insert(TABLE_NAME, null, values);
         db.close();
-        return id;
     }
 
     @SuppressLint("Range")
@@ -80,7 +82,8 @@ public class SqliteHelper extends SQLiteOpenHelper {
                     String coordinatesJson = cursor.getString(cursor.getColumnIndex(COLUMN_COORDINATES));
 
                     // Convert the JSON string back to a list of coordinates
-                    Gson gson = new Gson();
+                    GsonBuilder gsonBuilder = new GsonBuilder();// register type adapters here, specify field naming policy, etc.
+                    Gson gson = gsonBuilder.create();
                     Type listType = new TypeToken<List<List<Double>>>(){}.getType();
                     List<List<Double>> coordinates = gson.fromJson(coordinatesJson, listType);
 
