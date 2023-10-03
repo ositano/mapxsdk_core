@@ -165,9 +165,9 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             mBluetoothAdapter = mBluetoothManager != null ? mBluetoothManager.getAdapter() : null;
         }
 
-        if(lastConnectedDevice != null && !lastConnectedDevice.isEmpty() && currentLicenseValidity){
-            connectToBluetoothDevice(lastConnectedDevice);
-        }
+//        if(lastConnectedDevice != null && !lastConnectedDevice.isEmpty() && currentLicenseValidity){
+//            connectToBluetoothDevice(lastConnectedDevice);
+//        }
     }
 
     public void releaseResources(){
