@@ -123,6 +123,36 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
     private String hardWareModelNumber = "";
     private String startCaptureTime = "";
 
+    private void testSendingDataToNetwork(){
+        Log.d(TAG, "Sending data to server .....");
+        List<List<Double>>  coordinatesList = new ArrayList<>();
+        List<Double> list = new ArrayList<>();
+        list.add(7.488209);
+        list.add(9.051502);
+        coordinatesList.add(list);
+        coordinatesList.add(list);
+        coordinatesList.add(list);
+        coordinatesList.add(list);
+        String apiKey = sharedPreferencesHelper.getApiKey();
+        String secretKey = sharedPreferencesHelper.getSecretKey();
+        String endCaptureTime = getCurrentDateTime();
+        String timeToMap = "00:00:42";//calculateTimeDifference(startCaptureTime, endCaptureTime);
+
+        Log.d(TAG, "api key: "+apiKey+", secret key: "+secretKey);
+
+        CoordinateData coordinateData = new CoordinateData();
+        coordinateData.setCoordinates(coordinatesList);
+        coordinateData.setDatetime(getCurrentDateTime());
+        coordinateData.setHardWareSerialNumber("MAPX GENESIS 1.0");
+        coordinateData.setTimeToMap(timeToMap);
+        coordinateData.setHasSynced(false);
+
+        sqliteHelper.insertCoordinate(coordinateData);
+        Log.d(TAG, "sending data to the server: "+coordinateData.toString());
+        NetworkClientHelper.sendDataToServer(true, apiKey, secretKey, coordinateData, networkResponseListener);
+    }
+
+
 
     public MapXHardWareConnector(Context context, Activity activity, EventEmitter emitter) throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
         this.context = context;
@@ -143,6 +173,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 Log.d(TAG, "error from the server: "+error);
             }
         };
+
+
 
         currentLicenseValidity = sharedPreferencesHelper.isLicenseValid();
         if(currentLicenseValidity){
@@ -165,6 +197,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             mBluetoothAdapter = mBluetoothManager != null ? mBluetoothManager.getAdapter() : null;
         }
 
+        //testSendingDataToNetwork();
 //        if(lastConnectedDevice != null && !lastConnectedDevice.isEmpty() && currentLicenseValidity){
 //            connectToBluetoothDevice(lastConnectedDevice);
 //        }

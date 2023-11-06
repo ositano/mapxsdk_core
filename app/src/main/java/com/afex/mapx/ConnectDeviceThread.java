@@ -322,13 +322,35 @@ public class ConnectDeviceThread extends Thread {
             readMsg.sendToTarget();
         }
         else if (lastMessage.contains("MAPX")){
-            Message readMsg = handler.obtainMessage(
-                    MapXConstants.messageDeviceSerialNumber, -1, -1,
-                    new MapXBluetoothMessage(
-                            bluetoothDevice,
-                            lastMessage
-                    )
-            );
+            ///split message by words
+            String[] messageList = lastMessage.split(" ");
+            boolean hasCoordinateInfo = false;
+            String coordinateFormat = "";
+            for(String msg: messageList){
+                if(hasCoordinatesFormat(msg)){
+                    hasCoordinateInfo = true;
+                    coordinateFormat = msg;
+                }
+            }
+
+            Message readMsg;
+            if(hasCoordinateInfo){
+                readMsg = handler.obtainMessage(
+                        MapXConstants.messageTakePoint, -1, -1,
+                        new MapXBluetoothMessage(
+                                bluetoothDevice,
+                                coordinateFormat
+                        )
+                );
+            }else {
+                readMsg = handler.obtainMessage(
+                        MapXConstants.messageDeviceSerialNumber, -1, -1,
+                        new MapXBluetoothMessage(
+                                bluetoothDevice,
+                                lastMessage
+                        )
+                );
+            }
             readMsg.sendToTarget();
         }else if (lastMessage.contains("NRTK")){
             Message readMsg = handler.obtainMessage(
@@ -349,9 +371,9 @@ public class ConnectDeviceThread extends Thread {
             );
             readMsg.sendToTarget();
         }else{
-            Log.d(TAG, "  <<<*>>> reading coordinates : "+lastMessage);
+            //Log.d(TAG, "  <<<*>>> reading coordinates : "+lastMessage);
             if(hasCoordinatesFormat(lastMessage)){
-                Log.d(TAG, "  <<<*>>> data has coordinate format >>>>>>>>");
+                //Log.d(TAG, "  <<<*>>> data has coordinate format >>>>>>>>");
                 Message readMsg = handler.obtainMessage(
                         MapXConstants.messageTakePoint, -1, -1,
                         new MapXBluetoothMessage(
