@@ -202,8 +202,10 @@ public class ConnectDeviceThread extends Thread {
      * Pass a message to the read handler.
      */
     private void sendToReadHandler(String s) {
-        respondToBluetoothMessage(s.trim());
-        Log.i(TAG, "[RECV] " + s.trim());
+        if(!(s.trim().isEmpty())){
+            respondToBluetoothMessage(s);
+            Log.i(TAG, "[RECV] " + s);
+        }
     }
 
     /**
@@ -257,6 +259,9 @@ public class ConnectDeviceThread extends Thread {
 
             // Read data and add it to the buffer
             String s = read();
+            if(!s.endsWith(""+DELIMITER)){
+                s += DELIMITER;
+            }
             if (s.length() > 0)
                 rx_buffer += s;
 
@@ -311,12 +316,12 @@ public class ConnectDeviceThread extends Thread {
     }
 
     private void respondToBluetoothMessage(String lastMessage){
-        if (isNumber(lastMessage)){ ///likely a battery level
+        if (isNumber(lastMessage.trim())){ ///likely a battery level
             Message readMsg = handler.obtainMessage(
                     MapXConstants.messageReadBattery, -1, -1,
                     new MapXBluetoothMessage(
                             bluetoothDevice,
-                            lastMessage
+                            lastMessage.trim()
                     )
             );
             readMsg.sendToTarget();
@@ -327,9 +332,9 @@ public class ConnectDeviceThread extends Thread {
             boolean hasCoordinateInfo = false;
             String coordinateFormat = "";
             for(String msg: messageList){
-                if(hasCoordinatesFormat(msg)){
+                if(hasCoordinatesFormat(msg.trim())){
                     hasCoordinateInfo = true;
-                    coordinateFormat = msg;
+                    coordinateFormat = msg.trim();
                 }
             }
 
@@ -347,7 +352,7 @@ public class ConnectDeviceThread extends Thread {
                         MapXConstants.messageDeviceSerialNumber, -1, -1,
                         new MapXBluetoothMessage(
                                 bluetoothDevice,
-                                lastMessage
+                                lastMessage.trim()
                         )
                 );
             }
@@ -357,28 +362,37 @@ public class ConnectDeviceThread extends Thread {
                     MapXConstants.messageDeviceModelNumber, -1, -1,
                     new MapXBluetoothMessage(
                             bluetoothDevice,
-                            lastMessage
+                            lastMessage.trim()
                     )
             );
             readMsg.sendToTarget();
-        }else if (lastMessage.equals("OK")){
+        }else if (lastMessage.trim().equals("OK")){
             Message readMsg = handler.obtainMessage(
                     MapXConstants.messageEndSession, -1, -1,
                     new MapXBluetoothMessage(
                             bluetoothDevice,
-                            lastMessage
+                            lastMessage.trim()
                     )
             );
             readMsg.sendToTarget();
         }else{
             //Log.d(TAG, "  <<<*>>> reading coordinates : "+lastMessage);
-            if(hasCoordinatesFormat(lastMessage)){
+            if(hasCoordinatesFormat(lastMessage.trim())){
                 //Log.d(TAG, "  <<<*>>> data has coordinate format >>>>>>>>");
                 Message readMsg = handler.obtainMessage(
                         MapXConstants.messageTakePoint, -1, -1,
                         new MapXBluetoothMessage(
                                 bluetoothDevice,
-                                lastMessage
+                                lastMessage.trim()
+                        )
+                );
+                readMsg.sendToTarget();
+            }else{
+                Message readMsg = handler.obtainMessage(
+                        MapXConstants.messageTakePoint, -1, -1,
+                        new MapXBluetoothMessage(
+                                bluetoothDevice,
+                                "N/A"
                         )
                 );
                 readMsg.sendToTarget();
