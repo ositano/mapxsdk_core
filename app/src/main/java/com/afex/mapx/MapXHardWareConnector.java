@@ -1038,13 +1038,15 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 takePointResponse.put("message", message.getDataMessage());
                 emitter.success(takePointResponse);
 
-                String[] capturedPointList = message.getDataMessage().trim().split(",");
-                double latitude = Double.parseDouble(capturedPointList[0]);
-                double longitude = Double.parseDouble(capturedPointList[1]);
-                List<Double> pointList = new ArrayList<>();
-                pointList.add(latitude);
-                pointList.add(longitude);
-                capturedCoordinates.add(pointList);
+                if(!message.getDataMessage().trim().equalsIgnoreCase("N/A")){
+                    String[] capturedPointList = message.getDataMessage().trim().split(",");
+                    double latitude = Double.parseDouble(capturedPointList[0]);
+                    double longitude = Double.parseDouble(capturedPointList[1]);
+                    List<Double> pointList = new ArrayList<>();
+                    pointList.add(latitude);
+                    pointList.add(longitude);
+                    capturedCoordinates.add(pointList);
+                }
                 break;
 
             case MapXConstants.messageEndSession:
