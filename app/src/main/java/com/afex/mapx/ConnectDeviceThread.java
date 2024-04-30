@@ -33,6 +33,7 @@ public class ConnectDeviceThread extends Thread {
 
     // Delimiter used to separate messages
     private static final char DELIMITER = '\n';
+    private static final char DELIMITER2 = '\r';
 
     // UUID that specifies a protocol for generic bluetooth serial communication
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -217,8 +218,13 @@ public class ConnectDeviceThread extends Thread {
         int inx = rx_buffer.indexOf(DELIMITER);
 
         // If there is none, exit
-        if (inx == -1)
-            return;
+        if (inx == -1){
+            inx = rx_buffer.indexOf(DELIMITER2);
+            if (inx == -1) {
+                return;
+            }
+            //return;
+        }
 
         // Get the complete message
         String s = rx_buffer.substring(0, inx);
@@ -259,9 +265,10 @@ public class ConnectDeviceThread extends Thread {
 
             // Read data and add it to the buffer
             String s = read();
-            if(!s.endsWith(""+DELIMITER)){
+            if(!s.endsWith(""+DELIMITER) || !s.endsWith(""+DELIMITER2)){
                 s += DELIMITER;
             }
+
             if (s.length() > 0)
                 rx_buffer += s;
 
@@ -376,9 +383,7 @@ public class ConnectDeviceThread extends Thread {
             );
             readMsg.sendToTarget();
         }else{
-            //Log.d(TAG, "  <<<*>>> reading coordinates : "+lastMessage);
             if(hasCoordinatesFormat(lastMessage.trim())){
-                //Log.d(TAG, "  <<<*>>> data has coordinate format >>>>>>>>");
                 Message readMsg = handler.obtainMessage(
                         MapXConstants.messageTakePoint, -1, -1,
                         new MapXBluetoothMessage(
