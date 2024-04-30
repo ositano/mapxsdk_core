@@ -64,7 +64,7 @@ publishing {
     publications {
         myPulication(MavenPublication) {
             groupId 'com.afex'
-            version '1.0.3'
+            version '1.0.2'
             artifactId 'mapx'
             artifact("$buildDir/outputs/aar/app-release.aar")
         }
