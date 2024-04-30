@@ -333,7 +333,7 @@ public class ConnectDeviceThread extends Thread {
             );
             readMsg.sendToTarget();
         }
-        else if (lastMessage.contains("MAPX")){
+        else if (lastMessage.toLowerCase().contains("mapx")){
             ///split message by words
             String[] messageList = lastMessage.split(" ");
             boolean hasCoordinateInfo = false;
@@ -364,7 +364,7 @@ public class ConnectDeviceThread extends Thread {
                 );
             }
             readMsg.sendToTarget();
-        }else if (lastMessage.contains("NRTK")){
+        }else if (lastMessage.toLowerCase().contains("nrtk")){
             Message readMsg = handler.obtainMessage(
                     MapXConstants.messageDeviceModelNumber, -1, -1,
                     new MapXBluetoothMessage(
@@ -373,7 +373,7 @@ public class ConnectDeviceThread extends Thread {
                     )
             );
             readMsg.sendToTarget();
-        }else if (lastMessage.trim().equals("OK")){
+        }else if (lastMessage.trim().equalsIgnoreCase("ok")){
             Message readMsg = handler.obtainMessage(
                     MapXConstants.messageEndSession, -1, -1,
                     new MapXBluetoothMessage(
