@@ -170,22 +170,24 @@ public class ConnectDeviceThread extends Thread {
      */
     public void write(byte[] bytes) {
         try {
-            String s = new String(bytes);
-            // Add the delimiter
-            s += DELIMITER;
+            if(bytes != null && bytes.length > 0) {
+                String s = new String(bytes);
+                // Add the delimiter
+                s += DELIMITER;
 
-            // Convert to bytes and write
-            outStream.write(s.getBytes());
-            Log.i(TAG, "[SENT] " + s);
+                // Convert to bytes and write
+                outStream.write(s.getBytes());
+                Log.i(TAG, "[SENT] " + s);
 
-            Message readMsg = handler.obtainMessage(
-                    MapXConstants.messageWrite, -1, -1,
-                    new MapXBluetoothMessage(
-                            bluetoothDevice,
-                            s
-                    )
-            );
-            readMsg.sendToTarget();
+                Message readMsg = handler.obtainMessage(
+                        MapXConstants.messageWrite, -1, -1,
+                        new MapXBluetoothMessage(
+                                bluetoothDevice,
+                                s
+                        )
+                );
+                readMsg.sendToTarget();
+            }
         } catch (Exception e) {
             Message readMsg = handler.obtainMessage(
                     MapXConstants.messageWriteFailed, -1, -1,
