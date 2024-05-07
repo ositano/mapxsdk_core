@@ -205,6 +205,34 @@ public class ConnectDeviceThread extends Thread {
     private void sendToReadHandler(String s) {
         if(!(s.trim().isEmpty())){
             respondToBluetoothMessage(s);
+            if(s.contains("\r")) {
+                Log.i(TAG, "[Carriage Return] " + s);
+            }
+            if(s.contains("\n")) {
+                Log.i(TAG, "[New Line] " + s);
+            }
+
+            if(s.contains("\t")) {
+                Log.i(TAG, "[Horizontal Tab] " + s);
+            }
+
+            if(s.contains("\b")) {
+                Log.i(TAG, "[Backspace] " + s);
+            }
+
+            if(s.contains("\f")) {
+                Log.i(TAG, "[Form feed] " + s);
+            }
+
+            if(s.contains("\\")) {
+                Log.i(TAG, "[Backlash] " + s);
+            }
+            if(s.contains("\"")) {
+                Log.i(TAG, "[Double quotation mark] " + s);
+            }
+            if(s.contains("\'")) {
+                Log.i(TAG, "[Single quotation mark] " + s);
+            }
             Log.i(TAG, "[RECV] " + s);
         }
     }
@@ -281,7 +309,7 @@ public class ConnectDeviceThread extends Thread {
         sendToReadHandler("DISCONNECTED");
     }
 
-        public void close() {
+    public void close() {
         if (inStream != null) {
             try {
                 inStream.close();
