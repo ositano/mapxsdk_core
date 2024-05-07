@@ -235,7 +235,8 @@ public class ConnectDeviceThread extends Thread {
             if(s.contains("\'")) {
                 Log.i(TAG, "[Single quotation mark] " + s);
             }
-            Log.i(TAG, "[RECV] " + s);
+            Log.i(TAG, "[RECV] " + s  + " || "+ s.length());
+            Log.i(TAG, "[BT DATA] " + s.trim()+ " || " + s.trim().length());
         }
     }
 
