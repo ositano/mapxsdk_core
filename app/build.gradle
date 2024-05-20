@@ -62,7 +62,7 @@ android {
 
 publishing {
     publications {
-        myPulication(MavenPublication) {
+        myPublication(MavenPublication) {
             groupId 'com.afex'
             version '1.0.2'
             artifactId 'mapx'

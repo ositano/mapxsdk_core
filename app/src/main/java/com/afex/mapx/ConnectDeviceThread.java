@@ -31,9 +31,9 @@ public class ConnectDeviceThread extends Thread {
     // Tag for logging
     private static final String TAG = "ConnectDeviceThread";
 
-    // Delimiter used to separate messages
+    // Delimiters used to separate messages
     private static final char DELIMITER = '\n';
-    private static final char DELIMITER2 = '\r';
+    private static final char[] DELIMITERS = {'\n', '\r', '\t'};
 
     // UUID that specifies a protocol for generic bluetooth serial communication
     private static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -55,7 +55,8 @@ public class ConnectDeviceThread extends Thread {
     //private final Handler writeHandler;
 
     // Buffer used to parse messages
-    private String rx_buffer = "";
+    //private String rx_buffer = "";
+    private StringBuilder rx_buffer = new StringBuilder();
 
     protected static final UUID SERIAL_PROFILE_UUID = UUID.fromString(
             "00001101-0000-1000-8000-00805F9B34FB"
@@ -69,7 +70,6 @@ public class ConnectDeviceThread extends Thread {
     public ConnectDeviceThread(Handler handler, BluetoothDevice bluetoothDevice) {
         this.handler = handler;
         this.bluetoothDevice = bluetoothDevice;
-
     }
 
 
@@ -148,8 +148,7 @@ public class ConnectDeviceThread extends Thread {
                 int bytesRead = inStream.read(inBuffer);
 
                 // Convert read bytes into a string
-                s = new String(inBuffer, StandardCharsets.US_ASCII);
-                s = s.substring(0, bytesRead);
+                s = new String(inBuffer, 0, bytesRead, StandardCharsets.US_ASCII);
             }
         } catch (Exception e) {
             Message readMsg = handler.obtainMessage(
@@ -173,7 +172,7 @@ public class ConnectDeviceThread extends Thread {
             if(bytes != null && bytes.length > 0) {
                 String s = new String(bytes);
                 // Add the delimiter
-                s += DELIMITER;
+                s += DELIMITERS[0];
 
                 // Convert to bytes and write
                 outStream.write(s.getBytes());
@@ -207,34 +206,8 @@ public class ConnectDeviceThread extends Thread {
     private void sendToReadHandler(String s) {
         if(!(s.trim().isEmpty())){
             respondToBluetoothMessage(s);
-            if(s.contains("\r")) {
-                Log.i(TAG, "[Carriage Return] " + s);
-            }
-            if(s.contains("\n")) {
-                Log.i(TAG, "[New Line] " + s);
-            }
 
-            if(s.contains("\t")) {
-                Log.i(TAG, "[Horizontal Tab] " + s);
-            }
 
-            if(s.contains("\b")) {
-                Log.i(TAG, "[Backspace] " + s);
-            }
-
-            if(s.contains("\f")) {
-                Log.i(TAG, "[Form feed] " + s);
-            }
-
-            if(s.contains("\\")) {
-                Log.i(TAG, "[Backlash] " + s);
-            }
-            if(s.contains("\"")) {
-                Log.i(TAG, "[Double quotation mark] " + s);
-            }
-            if(s.contains("\'")) {
-                Log.i(TAG, "[Single quotation mark] " + s);
-            }
             Log.i(TAG, "[RECV] " + s  + " || "+ s.length());
             Log.i(TAG, "[BT DATA] " + s.trim()+ " || " + s.trim().length());
         }
@@ -244,30 +217,41 @@ public class ConnectDeviceThread extends Thread {
      * Send complete messages from the rx_buffer to the read handler.
      */
     private void parseMessages() {
-
         // Find the first delimiter in the buffer
-        int inx = rx_buffer.indexOf(DELIMITER);
+        //int inx = indexOfAny(rx_buffer, DELIMITERS);
+        int inx = rx_buffer.indexOf(String.valueOf(DELIMITER));
 
         // If there is none, exit
         if (inx == -1){
-            inx = rx_buffer.indexOf(DELIMITER2);
-            if (inx == -1) {
-                return;
-            }
-            //return;
+            return;
         }
 
         // Get the complete message
         String s = rx_buffer.substring(0, inx);
 
         // Remove the message from the buffer
-        rx_buffer = rx_buffer.substring(inx + 1);
+        //rx_buffer = rx_buffer.substring(inx + 1);
+        rx_buffer.delete(0, inx + 1);
 
         // Send to read handler
         sendToReadHandler(s);
 
         // Look for more complete messages
         parseMessages();
+    }
+
+    /**
+     * Helper method to find the index of any delimiter in the input string.
+     */
+    private int indexOfAny(String input, char[] delimiters) {
+        for (int i = 0; i < input.length(); i++) {
+            for (char delimiter : delimiters) {
+                if (input.charAt(i) == delimiter) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 
     /**
@@ -296,20 +280,39 @@ public class ConnectDeviceThread extends Thread {
 
             // Read data and add it to the buffer
             String s = read();
-            if(!s.endsWith(""+DELIMITER) || !s.endsWith(""+DELIMITER2)){
-                s += DELIMITER;
+            if (!s.isEmpty()) {
+                rx_buffer.append(s);
+
+                // Look for complete messages
+                parseMessages();
             }
-
-            if (s.length() > 0)
-                rx_buffer += s;
-
-            // Look for complete messages
-            parseMessages();
+//            String s = read();
+//            if (!endsWithAny(s, DELIMITERS)) {
+//                s += DELIMITERS[0]; // default to the first delimiter if no delimiter is found
+//            }
+//
+//            if (s.length() > 0)
+//                rx_buffer += s;
+//
+//            // Look for complete messages
+//            parseMessages();
         }
 
         // If thread is interrupted, close connections
         disconnect();
         sendToReadHandler("DISCONNECTED");
+    }
+
+    /**
+     * Helper method to check if a string ends with any delimiter.
+     */
+    private boolean endsWithAny(String input, char[] delimiters) {
+        for (char delimiter : delimiters) {
+            if (input.endsWith(String.valueOf(delimiter))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void close() {
