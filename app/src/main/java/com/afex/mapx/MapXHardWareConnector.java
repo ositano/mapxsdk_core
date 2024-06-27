@@ -269,11 +269,13 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
             String[] infoList = licenseInfo.split("\n");
             sharedPreferencesHelper.saveApiKey(infoList[0]);
             sharedPreferencesHelper.saveSecretKey(infoList[1]);
+            sharedPreferencesHelper.setFarmSyncEnabled(infoList.length > 2 && infoList[2].equalsIgnoreCase("true"));
         }else{
             sharedPreferencesHelper.saveLicenseKey(null);
             sharedPreferencesHelper.setLicenseValid(false);
             sharedPreferencesHelper.saveApiKey("");
             sharedPreferencesHelper.saveSecretKey("");
+            sharedPreferencesHelper.setFarmSyncEnabled(false);
         }
         return licenseStatus;
     }
@@ -978,30 +980,33 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
                 // Handle received data
                 Log.d(TAG, "checking this ending a session: "+message.getDataMessage());
                 if(message.getDataMessage().trim().equals("ESS")){ ///handles end session
-                    Log.d(TAG, "ending a session: ");
-                    String apiKey = sharedPreferencesHelper.getApiKey();
-                    String secretKey = sharedPreferencesHelper.getSecretKey();
-                    String endCaptureTime = getCurrentDateTime();
-                    String timeToMap = calculateTimeDifference(startCaptureTime, endCaptureTime);
+                    boolean isFarmSyncEnabled = sharedPreferencesHelper.isFarmSyncEnabled();
+                    if(isFarmSyncEnabled) {
+                        Log.d(TAG, "ending a session: ");
+                        String apiKey = sharedPreferencesHelper.getApiKey();
+                        String secretKey = sharedPreferencesHelper.getSecretKey();
+                        String endCaptureTime = getCurrentDateTime();
+                        String timeToMap = calculateTimeDifference(startCaptureTime, endCaptureTime);
 
-                    Log.d(TAG, "api key: "+apiKey+", secret key: "+secretKey);
+                        Log.d(TAG, "api key: " + apiKey + ", secret key: " + secretKey);
 
-                    CoordinateData coordinateData = new CoordinateData();
-                    coordinateData.setCoordinates(capturedCoordinates);
-                    coordinateData.setDatetime(getCurrentDateTime());
-                    coordinateData.setHardWareSerialNumber(hardWareSerialNumber);
-                    coordinateData.setTimeToMap(timeToMap);
-                    coordinateData.setHasSynced(false);
+                        CoordinateData coordinateData = new CoordinateData();
+                        coordinateData.setCoordinates(capturedCoordinates);
+                        coordinateData.setDatetime(getCurrentDateTime());
+                        coordinateData.setHardWareSerialNumber(hardWareSerialNumber);
+                        coordinateData.setTimeToMap(timeToMap);
+                        coordinateData.setHasSynced(false);
 
-                    sqliteHelper.insertCoordinate(coordinateData);
+                        sqliteHelper.insertCoordinate(coordinateData);
 
-                    ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
-                    if(currentConnection != null){
-                        currentConnection.close();
-                        disconnectDevice(message.getDevice().getAddress());
+                        ConnectDeviceThread currentConnection = connections.get(currentlyConnectedDevice);
+                        if (currentConnection != null) {
+                            currentConnection.close();
+                            disconnectDevice(message.getDevice().getAddress());
+                        }
+                        Log.d(TAG, "sending data to the server: " + coordinateData.toString());
+                        NetworkClientHelper.sendDataToServer(true, apiKey, secretKey, coordinateData, networkResponseListener);
                     }
-                    Log.d(TAG, "sending data to the server: "+coordinateData.toString());
-                    NetworkClientHelper.sendDataToServer(true, apiKey, secretKey, coordinateData, networkResponseListener);
                 }
                 break;
             case MapXConstants.messageRead:

@@ -1,6 +1,7 @@
 package com.afex.mapx.storage;
 
 import static com.afex.mapx.MapXConstants.API_KEY;
+import static com.afex.mapx.MapXConstants.IS_FARM_SYNC_ENABLED;
 import static com.afex.mapx.MapXConstants.IS_LICENSE_VALID;
 import static com.afex.mapx.MapXConstants.LAST_NAME_KEY;
 import static com.afex.mapx.MapXConstants.LAST_UUID_KEY;
@@ -67,6 +68,14 @@ public class SharedPreferencesHelper {
 
     public boolean isLicenseValid() {
         return sharedPreferences.getBoolean(IS_LICENSE_VALID, false);
+    }
+
+    public void setFarmSyncEnabled(boolean status){;
+        sharedPreferences.edit().putBoolean(IS_FARM_SYNC_ENABLED, status).apply();
+    }
+
+    public boolean isFarmSyncEnabled() {
+        return sharedPreferences.getBoolean(IS_FARM_SYNC_ENABLED, false);
     }
 }
 

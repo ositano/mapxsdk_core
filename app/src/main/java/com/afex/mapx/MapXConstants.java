@@ -27,4 +27,6 @@ public class MapXConstants {
     public static final String LICENSE_KEY = "100000";
     public static final String IS_LICENSE_VALID = "110000";
 
+    public static final String IS_FARM_SYNC_ENABLED = "1100001";
+
 }
