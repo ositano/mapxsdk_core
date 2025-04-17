@@ -235,20 +235,7 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         }
     }
 
-
-    ////////////////////////////////////////////////////////////
-    // ███    ███  ███████  ████████  ██   ██   ██████   ██████
-    // ████  ████  ██          ██     ██   ██  ██    ██  ██   ██
-    // ██ ████ ██  █████       ██     ███████  ██    ██  ██   ██
-    // ██  ██  ██  ██          ██     ██   ██  ██    ██  ██   ██
-    // ██      ██  ███████     ██     ██   ██   ██████   ██████
-    //
-    //  ██████   █████   ██       ██
-    // ██       ██   ██  ██       ██
-    // ██       ███████  ██       ██
-    // ██       ██   ██  ██       ██
-    //  ██████  ██   ██  ███████  ███████
-
+    ///method call
     private void checkLicense() throws MapXLicense.LicenseInitializationException, MapXLicense.InvalidLicenseException {
         if (isLicenseValid == null) {
             throw new MapXLicense.LicenseInitializationException("License key has not been initialized");
@@ -1211,13 +1198,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         refreshMethod.invoke(gatt);
     }
 
-    //////////////////////////////////////////////////////////////////////////////////////
-    // ██████   ███████  ██████   ███    ███  ██  ███████  ███████  ██   ██████   ███    ██
-    // ██   ██  ██       ██   ██  ████  ████  ██  ██       ██       ██  ██    ██  ████   ██
-    // ██████   █████    ██████   ██ ████ ██  ██  ███████  ███████  ██  ██    ██  ██ ██  ██
-    // ██       ██       ██   ██  ██  ██  ██  ██       ██       ██  ██  ██    ██  ██  ██ ██
-    // ██       ███████  ██   ██  ██      ██  ██  ███████  ███████  ██   ██████   ██   ████
 
+    ///permission
     boolean onRequestPermissionsResultValue = false;
     @Override
     public void onRequestPermissionsResult(int requestCode,
@@ -1284,19 +1266,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         lastEventId++;
     }
 
-    //////////////////////////////////////////////
-    // ██████   ██       ███████
-    // ██   ██  ██       ██
-    // ██████   ██       █████
-    // ██   ██  ██       ██
-    // ██████   ███████  ███████
-    //
-    // ██    ██  ████████  ██  ██       ███████
-    // ██    ██     ██     ██  ██       ██
-    // ██    ██     ██     ██  ██       ███████
-    // ██    ██     ██     ██  ██            ██
-    //  ██████      ██     ██  ███████  ███████
 
+    ///bluetooth utils
     @SuppressLint("MissingPermission")
     private void disconnectAllDevices(boolean alsoClose)
     {
@@ -1328,19 +1299,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         mMtu.clear();
     }
 
-    /////////////////////////////////////////////////////////////////////////////////////
-    //  █████   ██████    █████   ██████   ████████  ███████  ██████
-    // ██   ██  ██   ██  ██   ██  ██   ██     ██     ██       ██   ██
-    // ███████  ██   ██  ███████  ██████      ██     █████    ██████
-    // ██   ██  ██   ██  ██   ██  ██          ██     ██       ██   ██
-    // ██   ██  ██████   ██   ██  ██          ██     ███████  ██   ██
-    //
-    // ██████   ███████   ██████  ███████  ██  ██    ██  ███████  ██████
-    // ██   ██  ██       ██       ██       ██  ██    ██  ██       ██   ██
-    // ██████   █████    ██       █████    ██  ██    ██  █████    ██████
-    // ██   ██  ██       ██       ██       ██   ██  ██   ██       ██   ██
-    // ██   ██  ███████   ██████  ███████  ██    ████    ███████  ██   ██
 
+    ///adapter receivers
     private final BroadcastReceiver mBluetoothAdapterStateReceiver = new BroadcastReceiver()
     {
         @Override
@@ -1380,20 +1340,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         }
     };
 
-    /////////////////////////////////////////////////////////////////////////////////////
-    // ██████    ██████   ███    ██  ██████
-    // ██   ██  ██    ██  ████   ██  ██   ██
-    // ██████   ██    ██  ██ ██  ██  ██   ██
-    // ██   ██  ██    ██  ██  ██ ██  ██   ██
-    // ██████    ██████   ██   ████  ██████
-    //
-    // ██████   ███████   ██████  ███████  ██  ██    ██  ███████  ██████
-    // ██   ██  ██       ██       ██       ██  ██    ██  ██       ██   ██
-    // ██████   █████    ██       █████    ██  ██    ██  █████    ██████
-    // ██   ██  ██       ██       ██       ██   ██  ██   ██       ██   ██
-    // ██   ██  ███████   ██████  ███████  ██    ████    ███████  ██   ██
 
-
+    //Bond receiver
     private final BroadcastReceiver mBluetoothBondStateReceiver = new BroadcastReceiver()
     {
         @Override
@@ -1429,19 +1377,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         }
     };
 
-    /////////////////////////////////////////////////////////////////////////////
-    // ███████   ██████   █████   ███    ██
-    // ██       ██       ██   ██  ████   ██
-    // ███████  ██       ███████  ██ ██  ██
-    //      ██  ██       ██   ██  ██  ██ ██
-    // ███████   ██████  ██   ██  ██   ████
-    //
-    //  ██████   █████   ██       ██       ██████    █████    ██████  ██   ██
-    // ██       ██   ██  ██       ██       ██   ██  ██   ██  ██       ██  ██
-    // ██       ███████  ██       ██       ██████   ███████  ██       █████
-    // ██       ██   ██  ██       ██       ██   ██  ██   ██  ██       ██  ██
-    //  ██████  ██   ██  ███████  ███████  ██████   ██   ██   ██████  ██   ██
 
+    ///scan callback
     private ScanCallback scanCallback;
 
     private ScanCallback getScanCallback()
@@ -1519,18 +1456,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         return scanCallback;
     }
 
-    /////////////////////////////////////////////////////////////////////////////
-    //  ██████    █████   ████████  ████████
-    // ██        ██   ██     ██        ██
-    // ██   ███  ███████     ██        ██
-    // ██    ██  ██   ██     ██        ██
-    //  ██████   ██   ██     ██        ██
-    //
-    //  ██████   █████   ██       ██       ██████    █████    ██████  ██   ██
-    // ██       ██   ██  ██       ██       ██   ██  ██   ██  ██       ██  ██
-    // ██       ███████  ██       ██       ██████   ███████  ██       █████
-    // ██       ██   ██  ██       ██       ██   ██  ██   ██  ██       ██  ██
-    //  ██████  ██   ██  ███████  ███████  ██████   ██   ██   ██████  ██   ██
+
+    ///gatt callback
     @SuppressLint("MissingPermission")
     private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback()
     {
@@ -1812,19 +1739,9 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         }
     }; // BluetoothGattCallback
 
-    //////////////////////////////////////////////////////////////////////
-    // ███    ███  ███████   ██████      
-    // ████  ████  ██       ██           
-    // ██ ████ ██  ███████  ██   ███     
-    // ██  ██  ██       ██  ██    ██     
-    // ██      ██  ███████   ██████ 
-    //     
-    // ██   ██  ███████  ██       ██████   ███████  ██████   ███████ 
-    // ██   ██  ██       ██       ██   ██  ██       ██   ██  ██      
-    // ███████  █████    ██       ██████   █████    ██████   ███████ 
-    // ██   ██  ██       ██       ██       ██       ██   ██       ██ 
-    // ██   ██  ███████  ███████  ██       ███████  ██   ██  ███████ 
 
+
+    ///msg helpers
     HashMap<String, Object> bmAdvertisementData(ScanResult result) {
 
         int min = Integer.MIN_VALUE;
@@ -2052,13 +1969,8 @@ public class MapXHardWareConnector implements  ActivityCompat.OnRequestPermissio
         return result;
     }
 
-    //////////////////////////////////////////
-    // ██    ██ ████████  ██  ██       ███████
-    // ██    ██    ██     ██  ██       ██
-    // ██    ██    ██     ██  ██       ███████
-    // ██    ██    ██     ██  ██            ██
-    //  ██████     ██     ██  ███████  ███████
 
+    ///utils
     private void log(LogLevel level, String message)
     {
         if(level.ordinal() <= logLevel.ordinal()) {
